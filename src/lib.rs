@@ -28,3 +28,5 @@
 	clippy::use_self
 )]
 #![cfg_attr(docsrs, feature(doc_cfg), feature(doc_alias))]
+
+pub mod id;
