@@ -51,3 +51,23 @@ where
 		return Ok(result);
 	}
 }
+
+pub trait ReadToEnd {
+	fn read_to_end(&self, kind: ObjectKind, id: &Id) -> Result<Vec<u8>>;
+}
+
+impl<T> ReadToEnd for T
+where
+	T: BackendRead,
+{
+	fn read_to_end(&self, kind: ObjectKind, id: &Id) -> Result<Vec<u8>> {
+		// TODO: Maybe use const size to reduce call overhead
+		let meta = self.meta(kind, id)?;
+
+		let mut buf = Vec::with_capacity(meta.len as usize);
+
+		let _bread = self.read_all(kind, id, &mut buf);
+
+		Ok(buf)
+	}
+}

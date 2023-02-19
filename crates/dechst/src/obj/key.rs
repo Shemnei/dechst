@@ -1,12 +1,14 @@
+use std::io::Cursor;
+
 use argon2::{Argon2, ParamsBuilder, PasswordHasher};
 use chrono::{DateTime, Utc};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
-use crate::id::Id;
 use crate::obj::{ObjectKind, RepoObject};
-use crate::process::encrypt::{Encrypt, Encryption};
+use crate::process::encrypt::EncryptionParams;
+use crate::process::format::{Format, FormatterParams};
 
 #[serde_with::apply(Option => #[serde(default, skip_serializing_if = "Option::is_none")])]
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
@@ -89,6 +91,16 @@ pub struct KeyMeta {
 	pub created: DateTime<Utc>,
 }
 
+impl KeyMeta {
+	pub fn new() -> Self {
+		Self {
+			hostname: Some(whoami::hostname()),
+			username: Some(whoami::username()),
+			created: Utc::now(),
+		}
+	}
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Key {
 	#[serde(flatten)]
@@ -98,8 +110,24 @@ pub struct Key {
 }
 
 impl Key {
+	pub fn random() -> Self {
+		Self {
+			meta: KeyMeta::new(),
+			bytes: KeyBytes::random(32),
+		}
+	}
+
 	pub fn bytes(&self) -> &KeyBytes {
 		&self.bytes
+	}
+
+	pub fn encrypt(
+		&self,
+		opts: EncryptOptions,
+		encryption: EncryptionParams,
+		user_key: &[u8],
+	) -> EncryptedKey {
+		EncryptedKey::encrypt(self, opts, encryption, user_key)
 	}
 }
 
@@ -139,20 +167,20 @@ impl EncryptOptions {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EncryptedKey {
 	encrypted_bytes: Vec<u8>,
 	salt: [u8; 32],
 	#[serde(flatten)]
 	opts: EncryptOptions,
-	encryption: Encryption,
+	encryption: EncryptionParams,
 }
 
 impl EncryptedKey {
 	pub fn encrypt(
 		key: &Key,
 		opts: EncryptOptions,
-		encryption: Encryption,
+		encryption: EncryptionParams,
 		user_key: &[u8],
 	) -> Self {
 		let mut salt = [0; 32];
@@ -162,12 +190,10 @@ impl EncryptedKey {
 		let key_bytes =
 			Self::gen_key_bytes(opts, &salt_hex, user_key, encryption.key_length()).unwrap();
 
-		let mut buf = Vec::new();
-
-		ciborium::ser::into_writer(key, &mut buf).unwrap();
+		let bytes = FormatterParams::Cbor.format(key).unwrap();
 
 		let encrypted_bytes = encryption
-			.encrypt_bytes(key_bytes.as_bytes(), &buf)
+			.encrypt_bytes(key_bytes.as_bytes(), &bytes)
 			.unwrap();
 
 		Self {
@@ -190,7 +216,11 @@ impl EncryptedKey {
 			.decrypt_bytes(key_bytes.as_bytes(), &self.encrypted_bytes)
 			.unwrap();
 
-		ciborium::de::from_reader(decrypted_bytes.as_slice()).unwrap()
+		FormatterParams::Cbor.parse(&decrypted_bytes).unwrap()
+	}
+
+	pub fn try_unencrypted(&self) -> Key {
+		FormatterParams::Cbor.parse(&self.encrypted_bytes).unwrap()
 	}
 
 	fn gen_key_bytes<'a, 'b>(

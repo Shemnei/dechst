@@ -34,5 +34,5 @@
 pub mod backend;
 pub mod id;
 pub mod obj;
-pub mod repo;
 pub mod process;
+pub mod repo;

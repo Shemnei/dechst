@@ -2,16 +2,17 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use super::Instanciate;
 use crate::id::Id;
 use crate::obj::key::Key;
 
 #[cfg(not(any(feature = "blake3")))]
 compile_error!("At least one identifier feature must be active");
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum IdentifyError {
 	Unsupported {
-		identifier: Identifier,
+		identifier: String,
 		feature: &'static str,
 	},
 }
@@ -45,7 +46,23 @@ pub enum Identifier {
 	Blake3,
 }
 
-impl Identifier {
+impl Instanciate for Identifier {
+	type Instance = IdentifierParams;
+
+	fn create(&self) -> Self::Instance {
+		match self {
+			Self::Blake3 => IdentifierParams::Blake3,
+		}
+	}
+}
+
+#[allow(missing_copy_implementations)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum IdentifierParams {
+	Blake3,
+}
+
+impl IdentifierParams {
 	fn _identify(&self, key: &[u8], bytes: &[u8]) -> Result<Id> {
 		match self {
 			Self::Blake3 => {
@@ -57,7 +74,7 @@ impl Identifier {
 				#[cfg(not(feature = "blake3"))]
 				{
 					Err(IdentifyError::Unsupported {
-						identifier: *self,
+						identifier: format!("{self}"),
 						feature: "identifier-blake3",
 					})
 				}
@@ -66,7 +83,7 @@ impl Identifier {
 	}
 }
 
-impl fmt::Display for Identifier {
+impl fmt::Display for IdentifierParams {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Blake3 => f.write_str("Blake3"),
@@ -74,7 +91,7 @@ impl fmt::Display for Identifier {
 	}
 }
 
-impl Identify for Identifier {
+impl Identify for IdentifierParams {
 	fn identify(&self, key: &Key, bytes: &[u8]) -> Result<Id> {
 		self._identify(key.bytes().identify_key(), bytes)
 	}

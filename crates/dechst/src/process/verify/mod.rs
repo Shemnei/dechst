@@ -2,21 +2,23 @@ use std::{cmp, fmt};
 
 use serde::{Deserialize, Serialize};
 
+use super::Instanciate;
 use crate::obj::key::Key;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub enum VerifyError {
 	Unsupported {
-		identifier: Verifier,
+		verifier: String,
 		feature: &'static str,
 	},
+	VerficationFailed,
 }
 
 impl fmt::Display for VerifyError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Unsupported {
-				identifier,
+				verifier: identifier,
 				feature,
 			} => write!(
 				f,
@@ -24,6 +26,7 @@ impl fmt::Display for VerifyError {
 				 enabled)",
 				identifier, feature
 			),
+			Self::VerficationFailed => f.write_str("Failed to verify data"),
 		}
 	}
 }
@@ -34,19 +37,37 @@ type Result<T> = ::std::result::Result<T, VerifyError>;
 
 pub trait Verify {
 	fn tag(&self, key: &Key, bytes: &[u8]) -> Result<Vec<u8>>;
-	fn verify(&self, key: &Key, tag: &[u8], bytes: &[u8]) -> Result<bool>;
+	fn verify(&self, key: &Key, tag: &[u8], bytes: &[u8]) -> Result<()>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Verifier {
-	No,
+	None,
 	Blake3,
 }
 
-impl Verifier {
+impl Instanciate for Verifier {
+	type Instance = VerifierParams;
+
+	fn create(&self) -> Self::Instance {
+		match self {
+			Self::None => VerifierParams::None,
+			Self::Blake3 => VerifierParams::Blake3,
+		}
+	}
+}
+
+#[allow(missing_copy_implementations)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum VerifierParams {
+	None,
+	Blake3,
+}
+
+impl VerifierParams {
 	fn _tag(&self, key: &[u8], bytes: &[u8]) -> Result<Vec<u8>> {
 		match self {
-			Self::No => Ok(vec![]),
+			Self::None => Ok(vec![]),
 			Self::Blake3 => {
 				#[cfg(feature = "blake3")]
 				{
@@ -59,7 +80,7 @@ impl Verifier {
 				#[cfg(not(feature = "blake3"))]
 				{
 					Err(VerifyError::Unsupported {
-						identifier: *self,
+						verifier: format!("{self}"),
 						feature: "verifier-blake3",
 					})
 				}
@@ -67,9 +88,9 @@ impl Verifier {
 		}
 	}
 
-	fn _verify(&self, key: &[u8], tag: &[u8], bytes: &[u8]) -> Result<bool> {
+	fn _verify(&self, key: &[u8], tag: &[u8], bytes: &[u8]) -> Result<()> {
 		match self {
-			Self::No => Ok(tag.is_empty()),
+			Self::None => Ok(()),
 			Self::Blake3 => {
 				#[cfg(feature = "blake3")]
 				{
@@ -83,12 +104,16 @@ impl Verifier {
 					let input_hash = blake3::Hash::from(tmp_hash);
 					let output_hash = blake3::keyed_hash(&tmp_key, bytes);
 
-					Ok(output_hash.eq(&input_hash))
+					if output_hash == input_hash {
+						Ok(())
+					} else {
+						Err(VerifyError::VerficationFailed)
+					}
 				}
 				#[cfg(not(feature = "blake3"))]
 				{
 					Err(VerifyError::Unsupported {
-						identifier: *self,
+						verifier: format!("{self}"),
 						feature: "verifier-blake3",
 					})
 				}
@@ -97,20 +122,20 @@ impl Verifier {
 	}
 }
 
-impl Verify for Verifier {
+impl Verify for VerifierParams {
 	fn tag(&self, key: &Key, bytes: &[u8]) -> Result<Vec<u8>> {
 		self._tag(key.bytes().verify_key(), bytes)
 	}
 
-	fn verify(&self, key: &Key, tag: &[u8], bytes: &[u8]) -> Result<bool> {
+	fn verify(&self, key: &Key, tag: &[u8], bytes: &[u8]) -> Result<()> {
 		self._verify(key.bytes().verify_key(), tag, bytes)
 	}
 }
 
-impl fmt::Display for Verifier {
+impl fmt::Display for VerifierParams {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Self::No => f.write_str("None"),
+			Self::None => f.write_str("None"),
 			Self::Blake3 => f.write_str("Blake3"),
 		}
 	}

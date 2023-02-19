@@ -35,7 +35,7 @@ impl Local {
 	fn check_path<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf> {
 		let path = self.path.join(path);
 
-		println!("{}", path.display());
+		log::debug!("Verifing {}", path.display());
 
 		if !path.try_exists().unwrap() {
 			return Err(());

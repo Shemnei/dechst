@@ -4,12 +4,13 @@ use rand_core::RngCore;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
+use super::Instanciate;
 use crate::obj::key::Key;
 
 #[derive(Debug)]
 pub enum EncryptError {
 	Unsupported {
-		encryption: Encryption,
+		encryption: String,
 		feature: &'static str,
 	},
 	IoError {
@@ -55,11 +56,29 @@ pub trait Encrypt {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Encryption {
-	No,
+	None,
+	ChaCha20,
+}
+
+impl Instanciate for Encryption {
+	type Instance = EncryptionParams;
+
+	fn create(&self) -> Self::Instance {
+		match self {
+			Self::None => EncryptionParams::None,
+			Self::ChaCha20 => EncryptionParams::new_chacha20(),
+		}
+	}
+}
+
+#[allow(missing_copy_implementations)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum EncryptionParams {
+	None,
 	ChaCha20 { iv: [u8; 12] },
 }
 
-impl Encryption {
+impl EncryptionParams {
 	#[cfg(feature = "chacha20")]
 	pub fn new_chacha20() -> Self {
 		let mut iv: [u8; 12] = [0; 12];
@@ -69,14 +88,14 @@ impl Encryption {
 
 	pub fn key_length(&self) -> u32 {
 		match self {
-			Self::No => 16,
+			Self::None => 16,
 			Self::ChaCha20 { .. } => 32,
 		}
 	}
 
 	pub fn encrypt_bytes(&self, key: &[u8], bytes: &[u8]) -> Result<Vec<u8>> {
 		match self {
-			Self::No => Ok(bytes.into()),
+			Self::None => Ok(bytes.into()),
 			Self::ChaCha20 { iv } => {
 				#[cfg(feature = "chacha20")]
 				{
@@ -88,7 +107,7 @@ impl Encryption {
 					proper_key[..cmp::min(key.len(), 32)]
 						.clone_from_slice(&key[..cmp::min(key.len(), 32)]);
 
-					let key = GenericArray::from_slice(key);
+					let key = GenericArray::from_slice(&proper_key);
 					let iv = GenericArray::from_slice(&iv[..]);
 					let mut encryptor = ChaCha20::new(key, iv);
 
@@ -102,7 +121,7 @@ impl Encryption {
 				#[cfg(not(feature = "chacha20"))]
 				{
 					Err(IdentifyError::Unsupported {
-						encryption: *self,
+						encryption: format!("{self}"),
 						feature: "encryption-chacha20",
 					})
 				}
@@ -112,7 +131,7 @@ impl Encryption {
 
 	pub fn decrypt_bytes(&self, key: &[u8], bytes: &[u8]) -> Result<Vec<u8>> {
 		match self {
-			Self::No => Ok(bytes.into()),
+			Self::None => Ok(bytes.into()),
 			Self::ChaCha20 { iv } => {
 				#[cfg(feature = "chacha20")]
 				{
@@ -124,7 +143,7 @@ impl Encryption {
 					proper_key[..cmp::min(key.len(), 32)]
 						.clone_from_slice(&key[..cmp::min(key.len(), 32)]);
 
-					let key = GenericArray::from_slice(key);
+					let key = GenericArray::from_slice(&proper_key);
 					let iv = GenericArray::from_slice(&iv[..]);
 					let mut decryptor = ChaCha20::new(key, iv);
 
@@ -138,7 +157,7 @@ impl Encryption {
 				#[cfg(not(feature = "chacha20"))]
 				{
 					Err(IdentifyError::Unsupported {
-						encryption: *self,
+						encryption: format!("{self}"),
 						feature: "encryption-chacha20",
 					})
 				}
@@ -147,7 +166,7 @@ impl Encryption {
 	}
 }
 
-impl Encrypt for Encryption {
+impl Encrypt for EncryptionParams {
 	fn encrypt(&self, key: &Key, bytes: &[u8]) -> Result<Vec<u8>> {
 		self.encrypt_bytes(key.bytes().encrypt_key(), bytes)
 	}
@@ -157,10 +176,10 @@ impl Encrypt for Encryption {
 	}
 }
 
-impl fmt::Display for Encryption {
+impl fmt::Display for EncryptionParams {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Self::No => f.write_str("None"),
+			Self::None => f.write_str("None"),
 			Self::ChaCha20 { .. } => f.write_str("ChaCha20"),
 		}
 	}

@@ -3,6 +3,8 @@ use std::io::Cursor;
 
 use serde::{Deserialize, Serialize};
 
+use super::Instanciate;
+
 #[cfg(feature = "brotli")]
 const BUFFER_SIZE: usize = 4_096;
 #[cfg(feature = "brotli")]
@@ -13,7 +15,7 @@ const WINDOW_SIZE: u32 = 20;
 #[derive(Debug)]
 pub enum CompressError {
 	Unsupported {
-		compression: Compression,
+		compression: String,
 		feature: &'static str,
 	},
 	IoError {
@@ -57,16 +59,35 @@ pub trait Compress {
 	fn decompress(&self, bytes: &[u8]) -> Result<Vec<u8>>;
 }
 
+#[allow(missing_copy_implementations)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Compression {
-	No,
+	None,
 	Brotli,
 }
 
-impl Compress for Compression {
+impl Instanciate for Compression {
+	type Instance = CompressionParams;
+
+	fn create(&self) -> Self::Instance {
+		match self {
+			Self::None => CompressionParams::None,
+			Self::Brotli => CompressionParams::Brotli,
+		}
+	}
+}
+
+#[allow(missing_copy_implementations)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CompressionParams {
+	None,
+	Brotli,
+}
+
+impl Compress for CompressionParams {
 	fn compress(&self, bytes: &[u8]) -> Result<Vec<u8>> {
 		match self {
-			Self::No => Ok(bytes.into()),
+			Self::None => Ok(bytes.into()),
 			Self::Brotli => {
 				#[cfg(feature = "brotli")]
 				{
@@ -92,7 +113,7 @@ impl Compress for Compression {
 				#[cfg(not(feature = "brotli"))]
 				{
 					Err(CompressError::Unsupported {
-						compression: *self,
+						compression: format!("{self}"),
 						feature: "compression-brotli",
 					})
 				}
@@ -102,7 +123,7 @@ impl Compress for Compression {
 
 	fn decompress(&self, bytes: &[u8]) -> Result<Vec<u8>> {
 		match self {
-			Self::No => Ok(bytes.into()),
+			Self::None => Ok(bytes.into()),
 			Self::Brotli => {
 				#[cfg(feature = "brotli")]
 				{
@@ -124,7 +145,7 @@ impl Compress for Compression {
 				#[cfg(not(feature = "brotli"))]
 				{
 					Err(CompressError::Unsupported {
-						compression: *self,
+						compression: format!("{self}"),
 						feature: "compression-brotli",
 					})
 				}
@@ -133,10 +154,10 @@ impl Compress for Compression {
 	}
 }
 
-impl fmt::Display for Compression {
+impl fmt::Display for CompressionParams {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			Self::No => f.write_str("None"),
+			Self::None => f.write_str("None"),
 			Self::Brotli => f.write_str("Brotli"),
 		}
 	}

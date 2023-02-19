@@ -1,5 +1,11 @@
+use crate::backend::ext::{Find, FindIdExt, ReadToEnd};
 use crate::backend::BackendWrite;
-use crate::obj::lock::{Lock, Shared};
+use crate::id::Id;
+use crate::obj::config::Config;
+use crate::obj::key::{EncryptedKey, Key};
+use crate::obj::lock::{Lock, LockMeta, LockState, Shared};
+use crate::obj::ObjectKind;
+use crate::process::format::{FormatterParams, Format};
 use crate::repo::marker::LockMarker;
 
 pub type Error = ();
@@ -11,36 +17,75 @@ pub struct Repo<B> {
 }
 
 impl<B: BackendWrite> Repo<B> {
-	pub fn create(backend: B) -> Result<DecryptedRepo<B>> {
-		let mut backend = backend;
-
-		backend.create().unwrap();
-
-		Ok(DecryptedRepo { backend })
-	}
-
 	pub fn open(backend: B) -> Result<Self> {
 		backend.verify().unwrap();
 
 		Ok(Self { backend })
 	}
 
-	pub fn decrypt(self) -> Result<DecryptedRepo<B>, (Self, Error)> {
-		todo!()
+	fn get_key(&self, key_id: Id) -> Result<EncryptedKey> {
+		let key = self.backend.read_to_end(ObjectKind::Key, &key_id).unwrap();
+
+		Ok(FormatterParams::Cbor.parse(&key).unwrap())
+	}
+
+	pub fn keys(&self) -> Result<B::Iter> {
+		self.backend.iter(ObjectKind::Key)
+	}
+
+	pub fn find_key_id(&self, hex: &str) -> Result<Option<Find>> {
+		Ok(self.backend.find_id(ObjectKind::Key, hex).unwrap())
+	}
+
+	pub fn try_unencrypted(self, key_id: Id) -> Result<DecryptedRepo<B>, (Self, Error)> {
+		let key = self.get_key(key_id).unwrap();
+		let key = key.try_unencrypted();
+
+		Ok(DecryptedRepo {
+			backend: self.backend,
+			key,
+		})
+	}
+
+	pub fn decrypt(self, key_id: Id, password: &[u8]) -> Result<DecryptedRepo<B>, (Self, Error)> {
+		let key = self.get_key(key_id).unwrap();
+		let key = key.decrypt(password);
+
+		Ok(DecryptedRepo {
+			backend: self.backend,
+			key,
+		})
 	}
 }
 
 #[derive(Debug)]
 pub struct DecryptedRepo<B> {
 	backend: B,
+	key: Key,
 }
 
 impl<B: BackendWrite> DecryptedRepo<B> {
 	pub fn lock<CONFIG, INDEX, KEY, SNAPSHOT, PACK>(
 		self,
 		marker: LockMarker<CONFIG, INDEX, KEY, SNAPSHOT, PACK>,
-	) -> Result<LockedRepo<B, LockMarker<CONFIG, INDEX, KEY, SNAPSHOT, PACK>>, (Self, Error)> {
-		todo!()
+	) -> Result<LockedRepo<B, CONFIG, INDEX, KEY, SNAPSHOT, PACK>, (Self, Error)>
+	where
+		LockMarker<CONFIG, INDEX, KEY, SNAPSHOT, PACK>: Into<LockState> + Copy,
+	{
+		let state: LockState = marker.into();
+		let meta: LockMeta = LockMeta::new();
+
+		let lock = Lock { state, meta };
+		let lock = RepoLock {
+			lock,
+			_marker: marker,
+		};
+
+		Ok(LockedRepo {
+			backend: self.backend,
+			key: self.key,
+			_lock: lock,
+		})
 	}
 }
 
@@ -101,27 +146,29 @@ pub mod marker {
 }
 
 #[derive(Debug)]
-pub struct LockState<CONFIG, INDEX, KEY, SNAPSHOT, PACK> {
+pub struct RepoLock<CONFIG, INDEX, KEY, SNAPSHOT, PACK> {
 	lock: Lock,
 	_marker: LockMarker<CONFIG, INDEX, KEY, SNAPSHOT, PACK>,
 }
 
 #[derive(Debug)]
-pub struct LockedRepo<B, L> {
+pub struct LockedRepo<B, CONFIG, INDEX, KEY, SNAPSHOT, PACK> {
 	backend: B,
-	// TODO: decrypted state (e.g. key)
-	_lock: L,
+	key: Key,
+	_lock: RepoLock<CONFIG, INDEX, KEY, SNAPSHOT, PACK>,
 }
 
-impl<B, L> LockedRepo<B, L> {
+impl<B, CONFIG, INDEX, KEY, SNAPSHOT, PACK> LockedRepo<B, CONFIG, INDEX, KEY, SNAPSHOT, PACK> {
 	pub fn unlock(self) -> DecryptedRepo<B> {
 		DecryptedRepo {
 			backend: self.backend,
+			key: self.key,
 		}
 	}
 }
 
-impl<INDEX, KEY, SNAPSHOT, PACK, B: BackendWrite>
-	LockedRepo<B, LockMarker<Shared, INDEX, KEY, SNAPSHOT, PACK>>
-{
+impl<B, INDEX, KEY, SNAPSHOT, PACK> LockedRepo<B, Shared, INDEX, KEY, SNAPSHOT, PACK> {
+	pub fn read_config(&self) -> Result<Config> {
+		todo!()
+	}
 }

@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::obj::{ObjectKind, RepoObject};
+use crate::repo::marker::LockMarker;
 
 pub(crate) mod sealed {
 	pub trait Access {
@@ -47,6 +48,26 @@ pub struct LockState {
 	pub key: LockAccess,
 	pub snapshot: LockAccess,
 	pub pack: LockAccess,
+}
+
+impl<CONFIG, INDEX, KEY, SNAPSHOT, PACK> From<LockMarker<CONFIG, INDEX, KEY, SNAPSHOT, PACK>>
+	for LockState
+where
+	CONFIG: sealed::Access,
+	INDEX: sealed::Access,
+	KEY: sealed::Access,
+	SNAPSHOT: sealed::Access,
+	PACK: sealed::Access,
+{
+	fn from(_: LockMarker<CONFIG, INDEX, KEY, SNAPSHOT, PACK>) -> Self {
+		Self {
+			config: CONFIG::ACCESS,
+			index: INDEX::ACCESS,
+			key: KEY::ACCESS,
+			snapshot: SNAPSHOT::ACCESS,
+			pack: PACK::ACCESS,
+		}
+	}
 }
 
 #[serde_with::apply(Option => #[serde(default, skip_serializing_if = "Option::is_none")])]
