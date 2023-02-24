@@ -1,11 +1,19 @@
+pub mod config;
+pub mod index;
+pub mod key;
+pub mod lock;
+
 use crate::backend::ext::{Find, FindIdExt, ReadToEnd};
 use crate::backend::BackendWrite;
 use crate::id::Id;
 use crate::obj::config::Config;
 use crate::obj::key::{EncryptedKey, Key};
-use crate::obj::lock::{Lock, LockMeta, LockState, Shared};
+use crate::obj::lock::{Lock, LockMeta, LockState};
 use crate::obj::ObjectKind;
-use crate::process::format::{FormatterParams, Format};
+use crate::process::format::{Format, Formatter};
+use crate::process::identify::Identify;
+use crate::process::pipeline::{unprocess, ChunkPipeline};
+use crate::process::Instanciate;
 use crate::repo::marker::LockMarker;
 
 pub type Error = ();
@@ -26,7 +34,7 @@ impl<B: BackendWrite> Repo<B> {
 	fn get_key(&self, key_id: Id) -> Result<EncryptedKey> {
 		let key = self.backend.read_to_end(ObjectKind::Key, &key_id).unwrap();
 
-		Ok(FormatterParams::Cbor.parse(&key).unwrap())
+		Ok(Formatter::Cbor.parse(&key).unwrap())
 	}
 
 	pub fn keys(&self) -> Result<B::Iter> {
@@ -44,6 +52,7 @@ impl<B: BackendWrite> Repo<B> {
 		Ok(DecryptedRepo {
 			backend: self.backend,
 			key,
+			key_id,
 		})
 	}
 
@@ -54,7 +63,18 @@ impl<B: BackendWrite> Repo<B> {
 		Ok(DecryptedRepo {
 			backend: self.backend,
 			key,
+			key_id,
 		})
+	}
+
+	/// # Safety
+	/// This is marked as unsafe as the backend should in most cases only be
+	/// used by the `Repo` wrapper.
+	/// Direct access should be kept to a minimum as there are no safety guarantees
+	/// are enforced.
+	/// Extreme care must be taken to ensure the repository stays in a valid state.
+	pub unsafe fn backend(&self) -> &B {
+		&self.backend
 	}
 }
 
@@ -62,16 +82,19 @@ impl<B: BackendWrite> Repo<B> {
 pub struct DecryptedRepo<B> {
 	backend: B,
 	key: Key,
+	key_id: Id,
 }
 
 impl<B: BackendWrite> DecryptedRepo<B> {
 	pub fn lock<CONFIG, INDEX, KEY, SNAPSHOT, PACK>(
-		self,
+		mut self,
 		marker: LockMarker<CONFIG, INDEX, KEY, SNAPSHOT, PACK>,
 	) -> Result<LockedRepo<B, CONFIG, INDEX, KEY, SNAPSHOT, PACK>, (Self, Error)>
 	where
 		LockMarker<CONFIG, INDEX, KEY, SNAPSHOT, PACK>: Into<LockState> + Copy,
 	{
+		// TODO: Check existing locks
+
 		let state: LockState = marker.into();
 		let meta: LockMeta = LockMeta::new();
 
@@ -81,11 +104,74 @@ impl<B: BackendWrite> DecryptedRepo<B> {
 			_marker: marker,
 		};
 
+		// Fetch Config
+		let config: Config = {
+			let bytes = self
+				.backend
+				.read_to_end(ObjectKind::Config, &Id::ZERO)
+				.unwrap();
+			unprocess(Formatter::Cbor, &self.key, &bytes).unwrap()
+		};
+
+		// Write lock
+		let lock_id = {
+			let identifier = config.process.identifier.create();
+			let pipeline = ChunkPipeline::new(config.process, self.key.clone());
+
+			let bytes = Formatter::Cbor.format(&lock.lock).unwrap();
+			let id = identifier.identify(&self.key, &bytes).unwrap();
+
+			let bytes = pipeline.process(&bytes).unwrap();
+
+			self.backend
+				.write_all(ObjectKind::Lock, &id, &bytes)
+				.unwrap();
+
+			id
+		};
+
 		Ok(LockedRepo {
 			backend: self.backend,
 			key: self.key,
-			_lock: lock,
+			key_id: self.key_id,
+			lock,
+			lock_id,
+			config,
 		})
+	}
+
+	pub fn key(&self) -> &Key {
+		&self.key
+	}
+
+	pub fn key_id(&self) -> &Id {
+		&self.key_id
+	}
+
+	/// # Safety
+	/// This is marked as unsafe as the backend should in most cases only be
+	/// used by the `Repo` wrapper.
+	/// Direct access should be kept to a minimum as there are no safety guarantees
+	/// are enforced.
+	/// Extreme care must be taken to ensure the repository stays in a valid state.
+	pub unsafe fn backend(&self) -> &B {
+		&self.backend
+	}
+
+	/// # Safety
+	/// This is marked as unsafe as the backend should in most cases only be
+	/// used by the `Repo` wrapper.
+	/// Direct access should be kept to a minimum as there are no safety guarantees
+	/// are enforced.
+	/// Extreme care must be taken to ensure the repository stays in a valid state.
+	pub unsafe fn into_inner(self) -> (B, Key, Id) {
+		let DecryptedRepo {
+			backend,
+			key,
+			key_id,
+		} = self;
+
+		(backend, key, key_id)
 	}
 }
 
@@ -152,23 +238,53 @@ pub struct RepoLock<CONFIG, INDEX, KEY, SNAPSHOT, PACK> {
 }
 
 #[derive(Debug)]
-pub struct LockedRepo<B, CONFIG, INDEX, KEY, SNAPSHOT, PACK> {
+pub struct LockedRepo<B: BackendWrite, CONFIG, INDEX, KEY, SNAPSHOT, PACK> {
 	backend: B,
 	key: Key,
-	_lock: RepoLock<CONFIG, INDEX, KEY, SNAPSHOT, PACK>,
+	key_id: Id,
+	lock: RepoLock<CONFIG, INDEX, KEY, SNAPSHOT, PACK>,
+	lock_id: Id,
+	config: Config,
 }
 
-impl<B, CONFIG, INDEX, KEY, SNAPSHOT, PACK> LockedRepo<B, CONFIG, INDEX, KEY, SNAPSHOT, PACK> {
-	pub fn unlock(self) -> DecryptedRepo<B> {
-		DecryptedRepo {
-			backend: self.backend,
-			key: self.key,
-		}
+impl<B: BackendWrite, CONFIG, INDEX, KEY, SNAPSHOT, PACK>
+	LockedRepo<B, CONFIG, INDEX, KEY, SNAPSHOT, PACK>
+{
+	fn cleanup(&mut self) -> Result<()> {
+		log::debug!("Cleaning up lock {:x}", self.lock_id);
+
+		self.backend
+			.remove(ObjectKind::Lock, &self.lock_id)
+			.unwrap();
+
+		Ok(())
+	}
+
+	pub fn key(&self) -> &Key {
+		&self.key
+	}
+
+	pub fn key_id(&self) -> &Id {
+		&self.key_id
+	}
+
+	pub fn lock(&self) -> &Lock {
+		&self.lock.lock
+	}
+
+	pub fn lock_id(&self) -> &Id {
+		&self.lock_id
+	}
+
+	pub fn config(&self) -> &Config {
+		&self.config
 	}
 }
 
-impl<B, INDEX, KEY, SNAPSHOT, PACK> LockedRepo<B, Shared, INDEX, KEY, SNAPSHOT, PACK> {
-	pub fn read_config(&self) -> Result<Config> {
-		todo!()
+impl<B: BackendWrite, CONFIG, INDEX, KEY, SNAPSHOT, PACK> Drop
+	for LockedRepo<B, CONFIG, INDEX, KEY, SNAPSHOT, PACK>
+{
+	fn drop(&mut self) {
+		self.cleanup().unwrap();
 	}
 }

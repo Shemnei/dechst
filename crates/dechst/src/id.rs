@@ -3,7 +3,7 @@ use std::hash::Hash;
 use std::ops::Deref;
 use std::str::FromStr;
 
-pub(crate) const WIDTH: usize = 32;
+pub const WIDTH: usize = 32;
 
 #[rustfmt::skip]
 const HEX_LOWER: &[u8; 16] = b"0123456789abcdef";

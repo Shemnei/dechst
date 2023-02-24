@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::obj::{ObjectKind, RepoObject};
+use crate::os::User;
 use crate::repo::marker::LockMarker;
 
 pub(crate) mod sealed {
@@ -9,8 +10,8 @@ pub(crate) mod sealed {
 		const ACCESS: super::LockAccess;
 	}
 
-	pub trait AccessRead: Access {}
-	pub trait AccessWrite: AccessRead {}
+	pub trait AccessShared: Access {}
+	pub trait AccessExclusive: AccessShared {}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,16 +25,20 @@ pub struct Shared {}
 impl sealed::Access for Shared {
 	const ACCESS: self::LockAccess = LockAccess::Shared;
 }
-impl sealed::AccessRead for Shared {}
+impl sealed::AccessShared for Shared {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Exclusive {}
 impl sealed::Access for Exclusive {
 	const ACCESS: self::LockAccess = LockAccess::Exclusive;
 }
-impl sealed::AccessRead for Exclusive {}
-impl sealed::AccessWrite for Exclusive {}
+impl sealed::AccessShared for Exclusive {}
+impl sealed::AccessExclusive for Exclusive {}
 
+#[serde_with::apply(
+	Option => #[serde(default, skip_serializing_if = "Option::is_none")],
+	Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum LockAccess {
 	None,
@@ -41,6 +46,10 @@ pub enum LockAccess {
 	Exclusive,
 }
 
+#[serde_with::apply(
+	Option => #[serde(default, skip_serializing_if = "Option::is_none")],
+	Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LockState {
 	pub config: LockAccess,
@@ -70,15 +79,15 @@ where
 	}
 }
 
-#[serde_with::apply(Option => #[serde(default, skip_serializing_if = "Option::is_none")])]
+#[serde_with::apply(
+	Option => #[serde(default, skip_serializing_if = "Option::is_none")],
+	Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
+)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LockMeta {
-	pub hostname: Option<String>,
-	pub username: Option<String>,
+	pub user: User,
 	pub created: DateTime<Utc>,
 	pub pid: u32,
-	pub uid: Option<u32>,
-	pub gid: Option<u32>,
 }
 
 impl LockMeta {
@@ -97,16 +106,17 @@ impl LockMeta {
 	#[cfg(target_family = "unix")]
 	pub fn new() -> Self {
 		Self {
-			hostname: Some(whoami::hostname()),
-			username: Some(whoami::username()),
+			user: Default::default(),
 			created: Utc::now(),
 			pid: std::process::id(),
-			uid: Some(users::get_effective_uid()),
-			gid: Some(users::get_current_gid()),
 		}
 	}
 }
 
+#[serde_with::apply(
+	Option => #[serde(default, skip_serializing_if = "Option::is_none")],
+	Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
+)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lock {
 	#[serde(flatten)]

@@ -1,5 +1,3 @@
-use std::io::Cursor;
-
 use argon2::{Argon2, ParamsBuilder, PasswordHasher};
 use chrono::{DateTime, Utc};
 use rand::RngCore;
@@ -7,16 +5,24 @@ use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::obj::{ObjectKind, RepoObject};
-use crate::process::encrypt::EncryptionParams;
-use crate::process::format::{Format, FormatterParams};
+use crate::os::User;
+use crate::process::encrypt::Encryption;
+use crate::process::format::{Format, Formatter};
 
-#[serde_with::apply(Option => #[serde(default, skip_serializing_if = "Option::is_none")])]
+#[serde_with::apply(
+	Option => #[serde(default, skip_serializing_if = "Option::is_none")],
+	Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
+)]
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Zeroize, ZeroizeOnDrop)]
 pub struct KeyBytes {
+	#[serde(with = "serde_bytes")]
 	encrypt_key: Vec<u8>,
+	#[serde(with = "serde_bytes")]
 	verify_key: Vec<u8>,
+	#[serde(with = "serde_bytes")]
 	identify_key: Vec<u8>,
-	chunker_key: Vec<u8>,
+	#[serde(with = "serde_bytes")]
+	chunk_key: Vec<u8>,
 }
 
 impl KeyBytes {
@@ -42,15 +48,15 @@ impl KeyBytes {
 			encrypt_key: buf1,
 			verify_key: buf2,
 			identify_key: buf3,
-			chunker_key: buf4,
+			chunk_key: buf4,
 		}
 	}
 
 	pub fn random(len: usize) -> KeyBytes {
 		fn _random(len: usize) -> Vec<u8> {
-			let mut buf1 = vec![0; len];
-			rand::thread_rng().fill_bytes(&mut buf1);
-			buf1
+			let mut buf = vec![0; len];
+			rand::thread_rng().fill_bytes(&mut buf);
+			buf
 		}
 
 		let buf1 = _random(len);
@@ -62,7 +68,7 @@ impl KeyBytes {
 			encrypt_key: buf1,
 			verify_key: buf2,
 			identify_key: buf3,
-			chunker_key: buf4,
+			chunk_key: buf4,
 		}
 	}
 
@@ -78,29 +84,35 @@ impl KeyBytes {
 		&self.identify_key
 	}
 
-	pub fn chunker_key(&self) -> &[u8] {
-		&self.chunker_key
+	pub fn chunk_key(&self) -> &[u8] {
+		&self.chunk_key
 	}
 }
 
-#[serde_with::apply(Option => #[serde(default, skip_serializing_if = "Option::is_none")])]
+#[serde_with::apply(
+	Option => #[serde(default, skip_serializing_if = "Option::is_none")],
+	Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
+)]
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeyMeta {
-	pub hostname: Option<String>,
-	pub username: Option<String>,
+	#[serde(flatten)]
+	pub user: User,
 	pub created: DateTime<Utc>,
 }
 
 impl KeyMeta {
 	pub fn new() -> Self {
 		Self {
-			hostname: Some(whoami::hostname()),
-			username: Some(whoami::username()),
+			user: User::default(),
 			created: Utc::now(),
 		}
 	}
 }
 
+#[serde_with::apply(
+	Option => #[serde(default, skip_serializing_if = "Option::is_none")],
+	Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
+)]
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Key {
 	#[serde(flatten)]
@@ -121,20 +133,24 @@ impl Key {
 		&self.bytes
 	}
 
+	pub fn meta(&self) -> &KeyMeta {
+		&self.meta
+	}
+
 	pub fn encrypt(
 		&self,
 		opts: EncryptOptions,
-		encryption: EncryptionParams,
+		encryption: Encryption,
 		user_key: &[u8],
 	) -> EncryptedKey {
 		EncryptedKey::encrypt(self, opts, encryption, user_key)
 	}
 }
 
-impl RepoObject for Key {
-	const KIND: ObjectKind = ObjectKind::Key;
-}
-
+#[serde_with::apply(
+	Option => #[serde(default, skip_serializing_if = "Option::is_none")],
+	Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EncryptOptions {
 	mem_cost: u32,
@@ -167,20 +183,25 @@ impl EncryptOptions {
 	}
 }
 
+#[serde_with::apply(
+	Option => #[serde(default, skip_serializing_if = "Option::is_none")],
+	Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
+)]
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EncryptedKey {
+	#[serde(with = "serde_bytes")]
 	encrypted_bytes: Vec<u8>,
 	salt: [u8; 32],
 	#[serde(flatten)]
 	opts: EncryptOptions,
-	encryption: EncryptionParams,
+	encryption: Encryption,
 }
 
 impl EncryptedKey {
 	pub fn encrypt(
 		key: &Key,
 		opts: EncryptOptions,
-		encryption: EncryptionParams,
+		encryption: Encryption,
 		user_key: &[u8],
 	) -> Self {
 		let mut salt = [0; 32];
@@ -190,7 +211,7 @@ impl EncryptedKey {
 		let key_bytes =
 			Self::gen_key_bytes(opts, &salt_hex, user_key, encryption.key_length()).unwrap();
 
-		let bytes = FormatterParams::Cbor.format(key).unwrap();
+		let bytes = Formatter::Cbor.format(key).unwrap();
 
 		let encrypted_bytes = encryption
 			.encrypt_bytes(key_bytes.as_bytes(), &bytes)
@@ -216,11 +237,11 @@ impl EncryptedKey {
 			.decrypt_bytes(key_bytes.as_bytes(), &self.encrypted_bytes)
 			.unwrap();
 
-		FormatterParams::Cbor.parse(&decrypted_bytes).unwrap()
+		Formatter::Cbor.parse(&decrypted_bytes).unwrap()
 	}
 
 	pub fn try_unencrypted(&self) -> Key {
-		FormatterParams::Cbor.parse(&self.encrypted_bytes).unwrap()
+		Formatter::Cbor.parse(&self.encrypted_bytes).unwrap()
 	}
 
 	fn gen_key_bytes<'a, 'b>(
@@ -228,7 +249,7 @@ impl EncryptedKey {
 		salt_hex: &'a str,
 		user_key: &'b [u8],
 		key_length: u32,
-	) -> Result<argon2::password_hash::PasswordHashString, argon2::password_hash::Error> {
+	) -> Result<argon2::password_hash::Output, argon2::password_hash::Error> {
 		let mut params = opts.to_argon2_builder();
 		params.output_len(key_length as usize).unwrap();
 		let params = params.params().unwrap();
@@ -236,6 +257,10 @@ impl EncryptedKey {
 		let algo = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
 
 		algo.hash_password(user_key, salt_hex)
-			.map(|h| h.serialize())
+			.map(|x| x.hash.unwrap())
 	}
+}
+
+impl RepoObject for EncryptedKey {
+	const KIND: ObjectKind = ObjectKind::Key;
 }

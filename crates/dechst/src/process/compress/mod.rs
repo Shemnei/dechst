@@ -52,7 +52,7 @@ impl ::std::error::Error for CompressError {
 	}
 }
 
-type Result<T> = ::std::result::Result<T, CompressError>;
+pub type Result<T, E = CompressError> = ::std::result::Result<T, E>;
 
 pub trait Compress {
 	fn compress(&self, bytes: &[u8]) -> Result<Vec<u8>>;
@@ -61,30 +61,30 @@ pub trait Compress {
 
 #[allow(missing_copy_implementations)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Compression {
+pub enum CompressionParams {
 	None,
 	Brotli,
 }
 
-impl Instanciate for Compression {
-	type Instance = CompressionParams;
+impl Instanciate for CompressionParams {
+	type Instance = Compression;
 
 	fn create(&self) -> Self::Instance {
 		match self {
-			Self::None => CompressionParams::None,
-			Self::Brotli => CompressionParams::Brotli,
+			Self::None => Compression::None,
+			Self::Brotli => Compression::Brotli,
 		}
 	}
 }
 
 #[allow(missing_copy_implementations)]
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum CompressionParams {
+pub enum Compression {
 	None,
 	Brotli,
 }
 
-impl Compress for CompressionParams {
+impl Compress for Compression {
 	fn compress(&self, bytes: &[u8]) -> Result<Vec<u8>> {
 		match self {
 			Self::None => Ok(bytes.into()),
@@ -154,7 +154,7 @@ impl Compress for CompressionParams {
 	}
 }
 
-impl fmt::Display for CompressionParams {
+impl fmt::Display for Compression {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::None => f.write_str("None"),

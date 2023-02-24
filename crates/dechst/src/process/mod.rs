@@ -1,19 +1,17 @@
 use serde::{Deserialize, Serialize};
 
-use self::compress::Compression;
-use self::encrypt::Encryption;
-use self::identify::Identifier;
-use self::verify::Verifier;
+use self::compress::CompressionParams;
+use self::encrypt::EncryptionParams;
+use self::identify::IdentifierParams;
+use self::verify::VerifierParams;
 
 pub mod chunk;
 pub mod compress;
 pub mod encrypt;
+pub mod format;
 pub mod identify;
 pub mod pipeline;
 pub mod verify;
-pub mod format;
-
-/// TODO: format
 
 pub trait Instanciate: Copy {
 	type Instance;
@@ -23,8 +21,8 @@ pub trait Instanciate: Copy {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProcessOptions {
-	pub identifier: Identifier,
-	pub compression: Compression,
-	pub encryption: Encryption,
-	pub verifier: Verifier,
+	pub identifier: IdentifierParams,
+	pub compression: CompressionParams,
+	pub encryption: EncryptionParams,
+	pub verifier: VerifierParams,
 }

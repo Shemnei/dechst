@@ -19,8 +19,6 @@ impl RepoObject for Index {
 	const KIND: ObjectKind = ObjectKind::Index;
 }
 
-impl Index {}
-
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PackEntry {
 	pub id: Id,
@@ -38,7 +36,6 @@ pub struct BlobEntry {
 	pub id: Id,
 	pub kind: (),
 	pub offset: u32,
-	pub length: Option<NonZeroU32>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub unprocessed_length: Option<NonZeroU32>,
+	pub processed_len: u32,
+	pub unprocessed_len: u32,
 }

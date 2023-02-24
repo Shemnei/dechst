@@ -4,7 +4,10 @@ use crate::id::Id;
 use crate::obj::{ObjectKind, RepoObject};
 use crate::process::ProcessOptions;
 
-#[serde_with::apply(Option => #[serde(default, skip_serializing_if = "Option::is_none")])]
+#[serde_with::apply(
+	Option => #[serde(default, skip_serializing_if = "Option::is_none")],
+	Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
 	pub version: u32,

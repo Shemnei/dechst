@@ -3,6 +3,8 @@ pub mod config;
 pub mod index;
 pub mod key;
 pub mod lock;
+pub mod pack;
+pub mod snapshot;
 
 use std::fmt;
 
@@ -59,7 +61,9 @@ pub const DIRECTORY_OBJECTS: &[ObjectKind] = &[
 	ObjectKind::Lock,
 ];
 
-pub trait RepoObject: Serialize + DeserializeOwned + Sized + Send + Sync + 'static {
+pub trait RepoObject:
+	fmt::Debug + Serialize + DeserializeOwned + Sized + Send + Sync + 'static
+{
 	const KIND: ObjectKind;
 }
 

@@ -35,35 +35,35 @@ impl fmt::Display for IdentifyError {
 
 impl ::std::error::Error for IdentifyError {}
 
-type Result<T> = ::std::result::Result<T, IdentifyError>;
+pub type Result<T, E = IdentifyError> = ::std::result::Result<T, E>;
 
 pub trait Identify {
 	fn identify(&self, key: &Key, data: &[u8]) -> Result<Id>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Identifier {
+pub enum IdentifierParams {
 	Blake3,
 }
 
-impl Instanciate for Identifier {
-	type Instance = IdentifierParams;
+impl Instanciate for IdentifierParams {
+	type Instance = Identifier;
 
 	fn create(&self) -> Self::Instance {
 		match self {
-			Self::Blake3 => IdentifierParams::Blake3,
+			Self::Blake3 => Identifier::Blake3,
 		}
 	}
 }
 
 #[allow(missing_copy_implementations)]
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum IdentifierParams {
+pub enum Identifier {
 	Blake3,
 }
 
-impl IdentifierParams {
-	fn _identify(&self, key: &[u8], bytes: &[u8]) -> Result<Id> {
+impl Identifier {
+	fn _identify(&self, _key: &[u8], bytes: &[u8]) -> Result<Id> {
 		match self {
 			Self::Blake3 => {
 				#[cfg(feature = "blake3")]
@@ -83,7 +83,7 @@ impl IdentifierParams {
 	}
 }
 
-impl fmt::Display for IdentifierParams {
+impl fmt::Display for Identifier {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Blake3 => f.write_str("Blake3"),
@@ -91,7 +91,7 @@ impl fmt::Display for IdentifierParams {
 	}
 }
 
-impl Identify for IdentifierParams {
+impl Identify for Identifier {
 	fn identify(&self, key: &Key, bytes: &[u8]) -> Result<Id> {
 		self._identify(key.bytes().identify_key(), bytes)
 	}

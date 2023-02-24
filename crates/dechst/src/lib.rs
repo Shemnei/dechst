@@ -1,3 +1,8 @@
+//! TODO
+//! - Move out processing steps into separate crates
+//! - Save id within tagged chunk to verify it is correct
+//! - Make passphrase derivative function generic
+
 #![allow(rustdoc::private_intra_doc_links)]
 #![deny(
     // Documentation
@@ -17,7 +22,6 @@
 	rust_2018_idioms,
 	trivial_casts,
 	trivial_numeric_casts,
-	unsafe_code,
 	//unstable_features,
 	unused_import_braces,
 	//unused_qualifications,
@@ -34,5 +38,29 @@
 pub mod backend;
 pub mod id;
 pub mod obj;
+pub mod os;
 pub mod process;
 pub mod repo;
+
+mod ideas {
+	pub trait Target {
+		fn restore();
+		fn meta();
+	}
+
+	pub trait Source {
+		fn iter();
+		fn read();
+		fn meta();
+	}
+
+	#[derive(Debug, Clone, Copy)]
+	pub enum RestoreMode {
+		// Only create new files but dont touch existing ones
+		OnlyNew,
+		// Update exiting files
+		OnlyExisting,
+		// Restore + Delete any files not included in the backup
+		Clean,
+	}
+}

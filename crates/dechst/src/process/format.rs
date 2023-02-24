@@ -9,11 +9,11 @@ pub enum FormatError {
 		identifier: String,
 		feature: &'static str,
 	},
-	Failed(Box<dyn std::error::Error>),
+	Failed(Box<dyn std::error::Error + 'static + Send + Sync>),
 }
 
 impl FormatError {
-	pub fn from_err<E: std::error::Error + 'static>(err: E) -> Self {
+	pub fn from_err<E: std::error::Error + 'static + Send + Sync>(err: E) -> Self {
 		Self::Failed(Box::new(err))
 	}
 }
@@ -45,7 +45,7 @@ impl ::std::error::Error for FormatError {
 	}
 }
 
-type Result<T> = ::std::result::Result<T, FormatError>;
+pub type Result<T, E = FormatError> = ::std::result::Result<T, E>;
 
 pub trait Format {
 	fn format<V: ?Sized + serde::ser::Serialize>(&self, value: &V) -> Result<Vec<u8>>;
@@ -53,27 +53,27 @@ pub trait Format {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub enum Formatter {
+pub enum FormatterParams {
 	Cbor,
 }
 
-impl Instanciate for Formatter {
-	type Instance = FormatterParams;
+impl Instanciate for FormatterParams {
+	type Instance = Formatter;
 
 	fn create(&self) -> Self::Instance {
 		match self {
-			Self::Cbor => FormatterParams::Cbor,
+			Self::Cbor => Formatter::Cbor,
 		}
 	}
 }
 
 #[allow(missing_copy_implementations)]
 #[derive(Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub enum FormatterParams {
+pub enum Formatter {
 	Cbor,
 }
 
-impl fmt::Display for FormatterParams {
+impl fmt::Display for Formatter {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Cbor => f.write_str("Cbor"),
@@ -81,7 +81,7 @@ impl fmt::Display for FormatterParams {
 	}
 }
 
-impl Format for FormatterParams {
+impl Format for Formatter {
 	fn format<V: ?Sized + serde::ser::Serialize>(&self, value: &V) -> Result<Vec<u8>> {
 		match self {
 			Self::Cbor => {

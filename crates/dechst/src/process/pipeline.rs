@@ -1,10 +1,8 @@
 use std::fmt;
 
-use serde::Serialize;
-
 use super::compress::CompressError;
 use super::encrypt::EncryptError;
-use super::format::{Format, FormatError, FormatterParams};
+use super::format::{Format, FormatError, Formatter};
 use super::verify::VerifyError;
 use super::{Instanciate, ProcessOptions};
 use crate::obj::chunk::{CompressedChunk, TaggedChunk};
@@ -77,19 +75,29 @@ impl ChunkPipeline {
 		Self { key, opts }
 	}
 
-	pub fn process_forward(&self, bytes: &[u8]) -> Result<Vec<u8>> {
+	pub fn process(&self, bytes: &[u8]) -> Result<Vec<u8>> {
 		let tagged = CompressedChunk::compress(self.opts.compression.create(), bytes)?
 			.encrypt(&self.key, self.opts.encryption.create())?
 			.tag(&self.key, self.opts.verifier.create())?;
 
-		Ok(FormatterParams::Cbor.format(&tagged)?)
+		Ok(Formatter::Cbor.format(&tagged)?)
 	}
+}
 
-	pub fn process_backward(&self, bytes: &[u8]) -> Result<Vec<u8>> {
-		let tagged: TaggedChunk = FormatterParams::Cbor.parse(bytes)?;
+pub fn unprocess<'de, V: serde::de::Deserialize<'de>>(
+	format: Formatter,
+	key: &Key,
+	bytes: &[u8],
+) -> Result<V> {
+	let tagged: TaggedChunk = format.parse(&bytes).unwrap();
 
-		let bytes = tagged.verify(&self.key)?.decrypt(&self.key)?.decompress()?;
+	let bytes = tagged
+		.verify(&key)
+		.unwrap()
+		.decrypt(&key)
+		.unwrap()
+		.decompress()
+		.unwrap();
 
-		Ok(bytes)
-	}
+	Ok(format.parse(&bytes).unwrap())
 }

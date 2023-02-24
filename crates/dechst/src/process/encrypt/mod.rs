@@ -47,7 +47,7 @@ impl ::std::error::Error for EncryptError {
 	}
 }
 
-type Result<T> = ::std::result::Result<T, EncryptError>;
+pub type Result<T, E = EncryptError> = ::std::result::Result<T, E>;
 
 pub trait Encrypt {
 	fn encrypt(&self, key: &Key, bytes: &[u8]) -> Result<Vec<u8>>;
@@ -55,30 +55,30 @@ pub trait Encrypt {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Encryption {
+pub enum EncryptionParams {
 	None,
 	ChaCha20,
 }
 
-impl Instanciate for Encryption {
-	type Instance = EncryptionParams;
+impl Instanciate for EncryptionParams {
+	type Instance = Encryption;
 
 	fn create(&self) -> Self::Instance {
 		match self {
-			Self::None => EncryptionParams::None,
-			Self::ChaCha20 => EncryptionParams::new_chacha20(),
+			Self::None => Encryption::None,
+			Self::ChaCha20 => Encryption::new_chacha20(),
 		}
 	}
 }
 
 #[allow(missing_copy_implementations)]
 #[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum EncryptionParams {
+pub enum Encryption {
 	None,
 	ChaCha20 { iv: [u8; 12] },
 }
 
-impl EncryptionParams {
+impl Encryption {
 	#[cfg(feature = "chacha20")]
 	pub fn new_chacha20() -> Self {
 		let mut iv: [u8; 12] = [0; 12];
@@ -99,20 +99,18 @@ impl EncryptionParams {
 			Self::ChaCha20 { iv } => {
 				#[cfg(feature = "chacha20")]
 				{
-					use chacha20::cipher::generic_array::GenericArray;
 					use chacha20::cipher::{KeyIvInit, StreamCipher};
 					use chacha20::ChaCha20;
 
-					let mut proper_key: [u8; 32] = [0; 32];
-					proper_key[..cmp::min(key.len(), 32)]
-						.clone_from_slice(&key[..cmp::min(key.len(), 32)]);
+					let len = cmp::min(key.len(), 32);
 
-					let key = GenericArray::from_slice(&proper_key);
-					let iv = GenericArray::from_slice(&iv[..]);
-					let mut encryptor = ChaCha20::new(key, iv);
+					let mut proper_key: [u8; 32] = [0; 32];
+					proper_key[..len].clone_from_slice(&key[..len]);
+
+					let mut cipher = ChaCha20::new(&proper_key.into(), iv.into());
 
 					let mut final_result = bytes.to_vec();
-					encryptor.apply_keystream(&mut final_result);
+					cipher.apply_keystream(&mut final_result);
 
 					proper_key.zeroize();
 
@@ -132,41 +130,12 @@ impl EncryptionParams {
 	pub fn decrypt_bytes(&self, key: &[u8], bytes: &[u8]) -> Result<Vec<u8>> {
 		match self {
 			Self::None => Ok(bytes.into()),
-			Self::ChaCha20 { iv } => {
-				#[cfg(feature = "chacha20")]
-				{
-					use chacha20::cipher::generic_array::GenericArray;
-					use chacha20::cipher::{KeyIvInit, StreamCipher};
-					use chacha20::ChaCha20;
-
-					let mut proper_key: [u8; 32] = [0; 32];
-					proper_key[..cmp::min(key.len(), 32)]
-						.clone_from_slice(&key[..cmp::min(key.len(), 32)]);
-
-					let key = GenericArray::from_slice(&proper_key);
-					let iv = GenericArray::from_slice(&iv[..]);
-					let mut decryptor = ChaCha20::new(key, iv);
-
-					let mut final_result = bytes.to_vec();
-					decryptor.apply_keystream(&mut final_result);
-
-					proper_key.zeroize();
-
-					Ok(final_result)
-				}
-				#[cfg(not(feature = "chacha20"))]
-				{
-					Err(IdentifyError::Unsupported {
-						encryption: format!("{self}"),
-						feature: "encryption-chacha20",
-					})
-				}
-			}
+			Self::ChaCha20 { .. } => self.encrypt_bytes(key, bytes),
 		}
 	}
 }
 
-impl Encrypt for EncryptionParams {
+impl Encrypt for Encryption {
 	fn encrypt(&self, key: &Key, bytes: &[u8]) -> Result<Vec<u8>> {
 		self.encrypt_bytes(key.bytes().encrypt_key(), bytes)
 	}
@@ -176,7 +145,7 @@ impl Encrypt for EncryptionParams {
 	}
 }
 
-impl fmt::Display for EncryptionParams {
+impl fmt::Display for Encryption {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::None => f.write_str("None"),
