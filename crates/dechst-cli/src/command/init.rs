@@ -11,8 +11,9 @@ use dechst::process::pipeline::ChunkPipeline;
 use dechst::process::{Instanciate, ProcessOptions};
 use merge::Merge;
 
+use crate::opts::{GlobalOpts, ProcessOpts, RepoOpts};
 use crate::password::Password;
-use crate::{GlobalOpts, ProcessOpts, RepoOpts, DEFAULT_PASSWORD};
+use crate::DEFAULT_PASSWORD;
 
 #[derive(Debug, Args)]
 pub struct Opts {
@@ -38,7 +39,7 @@ pub fn execute<B: BackendWrite>(
 	let Opts { mut process } = cmd;
 	process.merge(ProcessOpts::recommended());
 
-	let encryption = process.encryption.unwrap();
+	let encryption = process.chunk.encryption.unwrap();
 	let encryption: EncryptionParams = encryption.into();
 
 	// Create key
@@ -54,10 +55,11 @@ pub fn execute<B: BackendWrite>(
 
 	// Create config file
 	let opts = ProcessOptions {
-		identifier: process.identifier.unwrap().into(),
-		compression: process.compression.unwrap().into(),
+		chunker: process.repo.chunker.unwrap().into(),
+		identifier: process.repo.identifier.unwrap().into(),
+		compression: process.chunk.compression.unwrap().into(),
 		encryption,
-		verifier: process.verifier.unwrap().into(),
+		verifier: process.chunk.verifier.unwrap().into(),
 	};
 
 	let config = Config::new(opts);

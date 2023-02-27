@@ -10,34 +10,24 @@ name = "dechst"
 [features]
 default = ["command-all", "format-all"]
 
-command-all = ["command-man", "command-completions", "command-md", "command-self-update"]
+command-all = [
+  "command-man",
+  "command-completions",
+  "command-md",
+  "command-self-update",
+]
 command-man = ["clap_mangen"]
 command-completions = ["clap_complete"]
 command-md = ["clap-markdown"]
 command-self-update = ["self_update"]
 
-format-all = ["format-yaml", "format-json"]
+format-all = ["format-json", "format-yaml"]
 format-yaml = ["serde_yaml"]
 format-json = ["serde_json"]
 
 [dependencies]
-anyhow = "1.0.69"
-ciborium = "0.2.0"
-clap = { version = "4.1.6", features = ["derive", "env"] }
-dechst = { version = "0.1.0", path = "../dechst" }
-env_logger = "0.10.0"
-log = { version = "0.4.17", features = ["serde", "std"] }
-merge = "0.1.0"
-rpassword = "7.2.0"
-serde = { version = "1.0.152", features = ["derive"] }
-serde_with = "2.2.0"
-simplelog = "0.12.0"
-zeroize = { version = "1.5.7", features = ["derive", "std", "serde"] }
-
 # Optional
-
 ## Commands
-
 self_update = { version = "0.35.0", default-features = false, features = [
   "archive-tar",
   "compression-flate2",
@@ -53,5 +43,22 @@ clap_mangen = { version = "0.2.8", optional = true }
 ## Formats
 serde_json = { version = "1.0.93", optional = true }
 serde_yaml = { version = "0.9.17", optional = true }
+
+# Other
 hex = "0.4.3"
-chrono = { version = "0.4.23", default-features = false, features = ["serde", "clock"] }
+chrono = { version = "0.4.23", default-features = false, features = [
+  "serde",
+  "clock",
+] }
+anyhow = "1.0.69"
+ciborium = "0.2.0"
+clap = { version = "4.1.6", features = ["derive", "env"] }
+dechst = { version = "0.1.0", path = "../dechst" }
+env_logger = "0.10.0"
+log = { version = "0.4.17", features = ["serde", "std"] }
+merge = "0.1.0"
+rpassword = "7.2.0"
+serde = { version = "1.0.152", features = ["derive"] }
+serde_with = "2.2.0"
+simplelog = "0.12.0"
+zeroize = { version = "1.5.7", features = ["derive", "std", "serde"] }

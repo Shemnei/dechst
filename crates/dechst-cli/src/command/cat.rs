@@ -11,8 +11,8 @@ use dechst::obj::index::Index;
 use dechst::obj::key::{EncryptedKey, Key};
 use dechst::obj::lock::Lock;
 use dechst::obj::{self, RepoObject};
-use dechst::process::format::FormatterParams;
-use dechst::process::pipeline;
+use dechst::process::format::{Format, FormatterParams};
+use dechst::process::{pipeline, Instanciate};
 use dechst::repo::DecryptedRepo;
 use serde::{Deserialize, Serialize};
 

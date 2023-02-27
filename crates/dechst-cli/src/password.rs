@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::RepoOpts;
+use crate::opts::RepoOpts;
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct Password(String);
