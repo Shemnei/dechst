@@ -79,7 +79,7 @@ pub enum Encryption {
 }
 
 impl Encryption {
-	#[cfg(feature = "chacha20")]
+	#[cfg(feature = "encryption-chacha20")]
 	pub fn new_chacha20() -> Self {
 		let mut iv: [u8; 12] = [0; 12];
 		rand::thread_rng().fill_bytes(&mut iv);
@@ -97,7 +97,7 @@ impl Encryption {
 		match self {
 			Self::None => Ok(bytes.into()),
 			Self::ChaCha20 { iv } => {
-				#[cfg(feature = "chacha20")]
+				#[cfg(feature = "encryption-chacha20")]
 				{
 					use chacha20::cipher::{KeyIvInit, StreamCipher};
 					use chacha20::ChaCha20;
@@ -116,7 +116,7 @@ impl Encryption {
 
 					Ok(final_result)
 				}
-				#[cfg(not(feature = "chacha20"))]
+				#[cfg(not(feature = "encryption-chacha20"))]
 				{
 					Err(IdentifyError::Unsupported {
 						encryption: format!("{self}"),

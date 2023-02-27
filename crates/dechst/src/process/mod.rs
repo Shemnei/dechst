@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use self::chunk::ChunkerParams;
 use self::compress::CompressionParams;
 use self::encrypt::EncryptionParams;
 use self::identify::IdentifierParams;
@@ -21,6 +22,7 @@ pub trait Instanciate: Copy {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProcessOptions {
+	pub chunker: ChunkerParams,
 	pub identifier: IdentifierParams,
 	pub compression: CompressionParams,
 	pub encryption: EncryptionParams,

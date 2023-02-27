@@ -3,7 +3,24 @@ use std::io::{BufReader, Read};
 pub use dechst_chunker::prelude::*;
 use serde::{Deserialize, Serialize};
 
+use super::Instanciate;
+
 pub type Result<T, E = ::std::io::Error> = ::std::result::Result<T, E>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ChunkerParams {
+	FastCdc(FastCdc),
+}
+
+impl Instanciate for ChunkerParams {
+	type Instance = Chunker;
+
+	fn create(&self) -> Self::Instance {
+		match self {
+			Self::FastCdc(inner) => Chunker::FastCdc(*inner),
+		}
+	}
+}
 
 /// A collection of different chunking algorithms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -5,6 +5,8 @@ pub mod key;
 pub mod lock;
 pub mod pack;
 pub mod snapshot;
+pub mod blob;
+pub mod tree;
 
 use std::fmt;
 

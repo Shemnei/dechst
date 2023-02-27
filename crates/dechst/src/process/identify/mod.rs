@@ -6,7 +6,7 @@ use super::Instanciate;
 use crate::id::Id;
 use crate::obj::key::Key;
 
-#[cfg(not(any(feature = "blake3")))]
+#[cfg(not(any(feature = "identifier-blake3")))]
 compile_error!("At least one identifier feature must be active");
 
 #[derive(Debug)]
@@ -66,12 +66,12 @@ impl Identifier {
 	fn _identify(&self, _key: &[u8], bytes: &[u8]) -> Result<Id> {
 		match self {
 			Self::Blake3 => {
-				#[cfg(feature = "blake3")]
+				#[cfg(feature = "identifier-blake3")]
 				{
 					let hash = blake3::hash(&bytes);
 					Ok(Id::from_bytes(hash.as_bytes()))
 				}
-				#[cfg(not(feature = "blake3"))]
+				#[cfg(not(feature = "identifier-blake3"))]
 				{
 					Err(IdentifyError::Unsupported {
 						identifier: format!("{self}"),

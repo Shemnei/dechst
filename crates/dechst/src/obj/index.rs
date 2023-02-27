@@ -3,6 +3,7 @@ use std::num::NonZeroU32;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use super::blob::BlobKind;
 use crate::id::Id;
 use crate::obj::{ObjectKind, RepoObject};
 
@@ -29,12 +30,10 @@ pub struct PackEntry {
 	pub size: Option<NonZeroU32>,
 }
 
-impl PackEntry {}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlobEntry {
 	pub id: Id,
-	pub kind: (),
+	pub kind: BlobKind,
 	pub offset: u32,
 	pub processed_len: u32,
 	pub unprocessed_len: u32,

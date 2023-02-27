@@ -5,11 +5,11 @@ use serde::{Deserialize, Serialize};
 
 use super::Instanciate;
 
-#[cfg(feature = "brotli")]
+#[cfg(feature = "compression-brotli")]
 const BUFFER_SIZE: usize = 4_096;
-#[cfg(feature = "brotli")]
+#[cfg(feature = "compression-brotli")]
 const QUALITY: u32 = 5;
-#[cfg(feature = "brotli")]
+#[cfg(feature = "compression-brotli")]
 const WINDOW_SIZE: u32 = 20;
 
 #[derive(Debug)]
@@ -89,7 +89,7 @@ impl Compress for Compression {
 		match self {
 			Self::None => Ok(bytes.into()),
 			Self::Brotli => {
-				#[cfg(feature = "brotli")]
+				#[cfg(feature = "compression-brotli")]
 				{
 					use brotli::CompressorWriter;
 
@@ -110,7 +110,7 @@ impl Compress for Compression {
 
 					Ok(encoder.into_inner().into_inner())
 				}
-				#[cfg(not(feature = "brotli"))]
+				#[cfg(not(feature = "compression-brotli"))]
 				{
 					Err(CompressError::Unsupported {
 						compression: format!("{self}"),
@@ -125,7 +125,7 @@ impl Compress for Compression {
 		match self {
 			Self::None => Ok(bytes.into()),
 			Self::Brotli => {
-				#[cfg(feature = "brotli")]
+				#[cfg(feature = "compression-brotli")]
 				{
 					use brotli::Decompressor;
 
@@ -142,7 +142,7 @@ impl Compress for Compression {
 
 					Ok(write)
 				}
-				#[cfg(not(feature = "brotli"))]
+				#[cfg(not(feature = "compression-brotli"))]
 				{
 					Err(CompressError::Unsupported {
 						compression: format!("{self}"),

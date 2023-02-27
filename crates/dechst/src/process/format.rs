@@ -85,7 +85,7 @@ impl Format for Formatter {
 	fn format<V: ?Sized + serde::ser::Serialize>(&self, value: &V) -> Result<Vec<u8>> {
 		match self {
 			Self::Cbor => {
-				#[cfg(feature = "ciborium")]
+				#[cfg(feature = "formatter-cbor")]
 				{
 					let mut cur = Cursor::new(Vec::new());
 
@@ -93,7 +93,7 @@ impl Format for Formatter {
 
 					Ok(cur.into_inner())
 				}
-				#[cfg(not(feature = "ciborium"))]
+				#[cfg(not(feature = "formatter-cbor"))]
 				{
 					Err(FormatError::Unsupported {
 						identifier: format!("{self}"),
@@ -107,14 +107,14 @@ impl Format for Formatter {
 	fn parse<'de, V: serde::de::Deserialize<'de>>(&self, bytes: &[u8]) -> Result<V> {
 		match self {
 			Self::Cbor => {
-				#[cfg(feature = "ciborium")]
+				#[cfg(feature = "formatter-cbor")]
 				{
 					match ciborium::de::from_reader(bytes) {
 						Ok(v) => Ok(v),
 						Err(e) => Err(FormatError::from_err(e)),
 					}
 				}
-				#[cfg(not(feature = "ciborium"))]
+				#[cfg(not(feature = "formatter-cbor"))]
 				{
 					Err(FormatError::Unsupported {
 						identifier: format!("{self}"),

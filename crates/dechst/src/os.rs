@@ -8,7 +8,8 @@ pub mod raw {
 	use serde::de::Visitor;
 	use serde::{Deserialize, Serialize};
 
-	#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+	// TODO: Alternativly use String with escaping
+	#[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
 	pub struct RawOsString(os_str_bytes::RawOsString);
 
 	impl fmt::Display for RawOsString {
@@ -108,7 +109,7 @@ pub mod unix {
 	)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 	pub struct Permissions {
-		mode: u32,
+		pub mode: u32,
 	}
 
 	#[serde_with::apply(
@@ -117,12 +118,12 @@ pub mod unix {
 	)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 	pub struct Times {
-		access: Option<DateTime<Utc>>,
+		pub access: Option<DateTime<Utc>>,
 		// Content changed
-		modify: Option<DateTime<Utc>>,
+		pub modify: Option<DateTime<Utc>>,
 		// Metadata changed
-		change: Option<DateTime<Utc>>,
-		create: Option<DateTime<Utc>>,
+		pub change: Option<DateTime<Utc>>,
+		pub create: Option<DateTime<Utc>>,
 	}
 
 	#[serde_with::apply(
@@ -131,9 +132,8 @@ pub mod unix {
 	)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 	pub struct Identifier {
-		dev: u64,
-		rdev: u64,
-		ino: u64,
+		pub dev: u64,
+		pub ino: u64,
 	}
 
 	#[serde_with::apply(
@@ -143,14 +143,14 @@ pub mod unix {
 	#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 	pub struct Metadata {
 		#[serde(flatten)]
-		user: User,
+		pub user: User,
 		#[serde(flatten)]
-		perm: Permissions,
+		pub perm: Permissions,
 		#[serde(flatten)]
-		time: Times,
+		pub time: Times,
 		#[serde(flatten)]
-		ident: Identifier,
-		len: u64,
+		pub ident: Identifier,
+		pub len: u64,
 	}
 }
 
@@ -188,7 +188,7 @@ pub mod windows {
 	)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 	pub struct Permissions {
-		attributes: u32,
+		pub attributes: u32,
 	}
 
 	// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/ns-fileapi-win32_file_attribute_data
@@ -199,10 +199,10 @@ pub mod windows {
 	)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 	pub struct Times {
-		access: Option<DateTime<Utc>>,
+		pub access: Option<DateTime<Utc>>,
 		// Content changed
-		modify: Option<DateTime<Utc>>,
-		create: Option<DateTime<Utc>>,
+		pub modify: Option<DateTime<Utc>>,
+		pub create: Option<DateTime<Utc>>,
 	}
 
 	#[serde_with::apply(
@@ -211,8 +211,8 @@ pub mod windows {
 	)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 	pub struct Identifier {
-		volume_serial_number: Option<u32>,
-		file_index: Option<u64>,
+		pub volume_serial_number: Option<u32>,
+		pub file_index: Option<u64>,
 	}
 
 	#[serde_with::apply(
@@ -222,15 +222,19 @@ pub mod windows {
 	#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 	pub struct Metadata {
 		#[serde(flatten)]
-		user: User,
+		pub user: User,
 		#[serde(flatten)]
-		perm: Permissions,
+		pub perm: Permissions,
 		#[serde(flatten)]
-		time: Times,
+		pub time: Times,
 		#[serde(flatten)]
-		ident: Identifier,
-		len: u64,
+		pub ident: Identifier,
+		pub len: u64,
 	}
+}
+
+pub mod generic {
+	// TODO: Implement
 }
 
 #[serde_with::apply(
@@ -241,6 +245,18 @@ pub mod windows {
 pub enum User {
 	Unix(unix::User),
 	Windows(windows::User),
+}
+
+impl From<unix::User> for User {
+	fn from(value: unix::User) -> Self {
+		Self::Unix(value)
+	}
+}
+
+impl From<windows::User> for User {
+	fn from(value: windows::User) -> Self {
+		Self::Windows(value)
+	}
 }
 
 #[cfg(any(target_family = "unix", target_family = "windows"))]
@@ -264,4 +280,16 @@ impl Default for User {
 pub enum Metadata {
 	Unix(unix::Metadata),
 	Windows(windows::Metadata),
+}
+
+impl From<unix::Metadata> for Metadata {
+	fn from(value: unix::Metadata) -> Self {
+		Self::Unix(value)
+	}
+}
+
+impl From<windows::Metadata> for Metadata {
+	fn from(value: windows::Metadata) -> Self {
+		Self::Windows(value)
+	}
 }

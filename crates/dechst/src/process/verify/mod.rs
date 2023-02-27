@@ -69,7 +69,7 @@ impl Verifier {
 		match self {
 			Self::None => Ok(vec![]),
 			Self::Blake3 => {
-				#[cfg(feature = "blake3")]
+				#[cfg(feature = "verifier-blake3")]
 				{
 					let mut tmp_key = [0_u8; 32];
 					let len = cmp::min(32, key.len());
@@ -77,7 +77,7 @@ impl Verifier {
 
 					Ok(blake3::keyed_hash(&tmp_key, bytes).as_bytes().to_vec())
 				}
-				#[cfg(not(feature = "blake3"))]
+				#[cfg(not(feature = "verifier-blake3"))]
 				{
 					Err(VerifyError::Unsupported {
 						verifier: format!("{self}"),
@@ -92,7 +92,7 @@ impl Verifier {
 		match self {
 			Self::None => Ok(()),
 			Self::Blake3 => {
-				#[cfg(feature = "blake3")]
+				#[cfg(feature = "verifier-blake3")]
 				{
 					let mut tmp_hash = [0_u8; 32];
 					tmp_hash.copy_from_slice(&tag[..32]);
@@ -110,7 +110,7 @@ impl Verifier {
 						Err(VerifyError::VerficationFailed)
 					}
 				}
-				#[cfg(not(feature = "blake3"))]
+				#[cfg(not(feature = "verifier-blake3"))]
 				{
 					Err(VerifyError::Unsupported {
 						verifier: format!("{self}"),

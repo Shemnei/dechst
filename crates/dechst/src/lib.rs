@@ -42,15 +42,11 @@ pub mod os;
 pub mod process;
 pub mod repo;
 
+pub mod source;
+
 mod ideas {
 	pub trait Target {
 		fn restore();
-		fn meta();
-	}
-
-	pub trait Source {
-		fn iter();
-		fn read();
 		fn meta();
 	}
 
