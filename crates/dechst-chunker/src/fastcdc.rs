@@ -273,9 +273,9 @@ pub const MAX_SIZE: u64 = 8_388_608; // 8 MiB
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FastCdc {
-	min_size: u64,
-	avg_size: u64,
-	max_size: u64,
+	pub min_size: u64,
+	pub avg_size: u64,
+	pub max_size: u64,
 }
 
 impl Default for FastCdc {

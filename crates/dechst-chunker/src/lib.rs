@@ -8,7 +8,10 @@
 pub mod fastcdc;
 
 pub mod prelude {
-	pub use crate::fastcdc::{FastCdc, FastCdcChunker};
+	pub use crate::fastcdc::{
+		FastCdc, FastCdcChunker, AVG_SIZE as FASTCDC_AVG_SIZE, MAX_SIZE as FASTCDC_MAX_SIZE,
+		MIN_SIZE as FASTCDC_MIN_SIZE,
+	};
 	pub use crate::{Algorithm, ChunkIter, ChunkRead};
 }
 
@@ -39,10 +42,7 @@ pub trait ChunkRead {
 
 	/// Reads a single chunk.
 	/// It's function is similar to [`Read::read`](::std::io::Read::read).
-	fn read_chunk(
-		&mut self,
-		buf: &mut Vec<u8>,
-	) -> Result<usize, ::std::io::Error>;
+	fn read_chunk(&mut self, buf: &mut Vec<u8>) -> Result<usize, ::std::io::Error>;
 }
 
 impl<C: ChunkRead + ?Sized> ChunkRead for Box<C> {
@@ -50,10 +50,7 @@ impl<C: ChunkRead + ?Sized> ChunkRead for Box<C> {
 		self.as_ref().prefered_buffer()
 	}
 
-	fn read_chunk(
-		&mut self,
-		buf: &mut Vec<u8>,
-	) -> Result<usize, std::io::Error> {
+	fn read_chunk(&mut self, buf: &mut Vec<u8>) -> Result<usize, std::io::Error> {
 		self.as_mut().read_chunk(buf)
 	}
 }
