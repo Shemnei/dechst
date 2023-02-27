@@ -13,7 +13,7 @@ pub struct Opts {
 }
 
 pub fn execute(cmd: Opts) -> anyhow::Result<()> {
-	let mut command = crate::Opts::command();
+	let mut command = crate::opts::Opts::command();
 
 	if let Some(dir) = cmd.output_directory {
 		clap_complete::generate_to(cmd.shell, &mut command, BINARY_NAME, dir)?;

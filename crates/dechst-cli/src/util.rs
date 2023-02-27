@@ -3,8 +3,8 @@ use dechst::backend::BackendWrite;
 use dechst::id::Id;
 use dechst::repo::{DecryptedRepo, Repo};
 
+use crate::opts::RepoOpts;
 use crate::password::Password;
-use crate::RepoOpts;
 
 // TODO: Interactive key chooser
 pub fn unlock_repo<B: BackendWrite>(

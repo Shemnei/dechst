@@ -17,8 +17,8 @@ use dechst::repo::DecryptedRepo;
 use serde::{Deserialize, Serialize};
 
 use crate::format::OutputFormat;
+use crate::opts::{GlobalOpts, RepoOpts};
 use crate::password::Password;
-use crate::{GlobalOpts, RepoOpts};
 
 #[derive(Debug, Clone, PartialEq, Eq, Args, Serialize, Deserialize)]
 struct KeyOpts {

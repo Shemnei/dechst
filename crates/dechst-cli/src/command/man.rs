@@ -14,7 +14,7 @@ pub struct Opts {
 }
 
 pub fn execute(cmd: Opts) -> anyhow::Result<()> {
-	let command = crate::Opts::command();
+	let command = crate::opts::Opts::command();
 
 	let man = clap_mangen::Man::new(command);
 	let mut buffer: Vec<u8> = Default::default();

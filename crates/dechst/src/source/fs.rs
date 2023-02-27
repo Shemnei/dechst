@@ -29,7 +29,7 @@ impl FsSource {
 
 		#[cfg(target_family = "windows")]
 		{
-			return Ok(crate::os::windows::Metadata::from(&meta).into());
+			return Ok(crate::os::windows::Metadata::from(meta).into());
 		}
 
 		todo!("Implement generic/wasm")
@@ -127,6 +127,21 @@ impl From<&fs::Metadata> for crate::os::unix::Identifier {
 }
 
 #[cfg(target_family = "unix")]
+impl From<&fs::Metadata> for crate::os::unix::Metadata {
+	fn from(value: &fs::Metadata) -> Self {
+		let user = crate::os::unix::User::default();
+
+		Self {
+			user,
+			perm: value.into(),
+			time: value.into(),
+			ident: value.into(),
+			len: value.len(),
+		}
+	}
+}
+
+#[cfg(target_family = "unix")]
 impl TryFrom<(&Path, &fs::Metadata)> for NodeKind {
 	type Error = std::io::Error;
 
@@ -205,6 +220,21 @@ impl From<&fs::Metadata> for crate::os::windows::Identifier {
 }
 
 #[cfg(target_family = "windows")]
+impl From<&fs::Metadata> for crate::os::windows::Metadata {
+	fn from(value: &fs::Metadata) -> Self {
+		let user = crate::os::windows::User::default();
+
+		Self {
+			user,
+			perm: value.into(),
+			time: value.into(),
+			ident: value.into(),
+			len: value.len(),
+		}
+	}
+}
+
+#[cfg(target_family = "windows")]
 impl From<&fs::FileType> for TargetHint {
 	fn from(value: &fs::FileType) -> Self {
 		use std::os::windows::fs::FileTypeExt;
@@ -240,22 +270,5 @@ impl TryFrom<(&Path, &fs::Metadata)> for NodeKind {
 		};
 
 		Ok(kind)
-	}
-}
-
-impl From<&fs::Metadata> for crate::os::unix::Metadata {
-	fn from(value: &fs::Metadata) -> Self {
-		#[cfg(target_family = "windows")]
-		let user = crate::os::windows::User::default();
-		#[cfg(target_family = "unix")]
-		let user = crate::os::unix::User::default();
-
-		Self {
-			user,
-			perm: value.into(),
-			time: value.into(),
-			ident: value.into(),
-			len: value.len(),
-		}
 	}
 }

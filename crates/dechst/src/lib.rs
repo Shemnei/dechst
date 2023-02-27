@@ -34,6 +34,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg), feature(doc_alias))]
 #![feature(associated_type_defaults)]
 #![feature(fs_try_exists)]
+#![cfg_attr(target_family = "windows", feature(windows_by_handle))]
 
 pub mod backend;
 pub mod id;

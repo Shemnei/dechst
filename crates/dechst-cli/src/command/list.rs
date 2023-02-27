@@ -1,23 +1,12 @@
 /// TODO
 /// - Able to chose output format
-use std::str::FromStr;
-
-use clap::{Args, Subcommand, ValueEnum};
-use dechst::backend::ext::Find;
+use clap::{Args, ValueEnum};
 use dechst::backend::BackendWrite;
-use dechst::id::{self, Id};
 use dechst::obj;
-use dechst::obj::lock::{None, Shared};
-use dechst::repo::config::ConfigRead;
-use dechst::repo::index::IndexRead;
-use dechst::repo::key::KeyRead;
-use dechst::repo::lock::LockRead;
-use dechst::repo::marker::LockMarker;
-use dechst::repo::DecryptedRepo;
 use serde::{Deserialize, Serialize};
 
-use crate::password::Password;
-use crate::{GlobalOpts, RepoOpts};
+use crate::format::OutputFormat;
+use crate::opts::{GlobalOpts, RepoOpts};
 
 #[derive(Debug, Clone, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
 enum ObjectKind {
@@ -44,6 +33,9 @@ impl From<ObjectKind> for obj::ObjectKind {
 pub struct Opts {
 	#[arg(value_enum)]
 	object: ObjectKind,
+
+	#[arg(long, value_enum, global = true, default_value_t)]
+	format: OutputFormat,
 }
 
 pub fn execute<B: BackendWrite>(
@@ -54,15 +46,13 @@ pub fn execute<B: BackendWrite>(
 ) -> anyhow::Result<()> {
 	println!("Listing all {:?}", cmd.object);
 
-	let ids = backend.iter(cmd.object.into()).unwrap();
+	let ids = backend
+		.iter(cmd.object.into())
+		.unwrap()
+		.collect::<Result<Vec<_>, _>>()
+		.unwrap();
 
-	for id in ids {
-		let Ok(id) = id else {
-			continue;
-		};
-
-		println!("{id:x}");
-	}
+	cmd.format.print(&ids);
 
 	Ok(())
 }

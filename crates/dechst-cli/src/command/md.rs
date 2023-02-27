@@ -14,7 +14,7 @@ pub struct Opts {
 }
 
 pub fn execute(cmd: Opts) -> anyhow::Result<()> {
-	let md = clap_markdown::help_markdown::<crate::Opts>();
+	let md = clap_markdown::help_markdown::<crate::opts::Opts>();
 
 	if let Some(dir) = cmd.output_directory {
 		let output = dir.join(format!("{BINARY_NAME}.md"));

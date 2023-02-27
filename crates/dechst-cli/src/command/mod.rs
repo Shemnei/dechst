@@ -16,8 +16,8 @@ use dechst::backend::local2::Local2;
 use dechst::backend::BackendWrite;
 use dechst::repo::Repo;
 
+use crate::opts::Opts;
 use crate::util::unlock_repo;
-use crate::Opts;
 
 #[non_exhaustive]
 #[derive(Debug, Subcommand)]

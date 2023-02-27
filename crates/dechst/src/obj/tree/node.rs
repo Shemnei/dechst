@@ -60,10 +60,10 @@ impl NodeKind {
 	}
 
 	#[cfg(target_family = "windows")]
-	pub fn symlink(target: OsString, hint: Option<TargetHint>) -> Self {
+	pub fn symlink(target: OsString, hint: TargetHint) -> Self {
 		Self::Symlink {
 			target: RawOsString::default(),
-			hint,
+			hint: Some(hint),
 		}
 	}
 

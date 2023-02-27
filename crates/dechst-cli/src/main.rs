@@ -1,5 +1,6 @@
 use clap::Parser;
-use dechst_cli::{command, Opts};
+use dechst_cli::command;
+use dechst_cli::opts::Opts;
 use log::LevelFilter;
 use simplelog::{ColorChoice, ConfigBuilder, TermLogger, TerminalMode};
 

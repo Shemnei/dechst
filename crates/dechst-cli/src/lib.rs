@@ -6,11 +6,6 @@ pub mod opts;
 pub mod password;
 pub mod util;
 
-pub use opts::global::GlobalOpts;
-pub use opts::process::{ChunkProcessOpts, RepoProcessOpts};
-pub use opts::repo::RepoOpts;
-pub use opts::Opts;
-
 /// Password used if the repository does not use encryption.
 pub const DEFAULT_PASSWORD: &str = "";
 

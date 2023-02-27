@@ -8,3 +8,7 @@ man:
 
 install: comp man
 	cargo install --path {{ justfile_directory() }}/crates/dechst-cli
+
+check:
+	cargo check
+	cargo check --target x86_64-pc-windows-gnu

@@ -94,12 +94,9 @@ impl LockMeta {
 	#[cfg(not(target_family = "unix"))]
 	pub fn new() -> Self {
 		Self {
-			hostname: Some(whoami::hostname()),
-			username: Some(whoami::username()),
+			user: Default::default(),
 			created: Utc::now(),
 			pid: std::process::id(),
-			uid: None,
-			gid: None,
 		}
 	}
 
