@@ -1,12 +1,11 @@
 use std::fs::{self, File, Metadata, ReadDir};
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, UNIX_EPOCH};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 
 use super::Source;
-use crate::obj::tree::node::{Node, NodeKind, TargetHint};
+use crate::obj::tree::node::{Node, NodeKind};
 use crate::os::raw::RawOsString;
 
 #[derive(Debug)]
@@ -100,9 +99,18 @@ impl From<&fs::Metadata> for crate::os::unix::Times {
 	fn from(value: &fs::Metadata) -> Self {
 		use std::os::unix::fs::MetadataExt;
 
-		let access = Some(dt_from_epoch(value.atime().try_into().unwrap()));
-		let modify = Some(dt_from_epoch(value.mtime().try_into().unwrap()));
-		let change = Some(dt_from_epoch(value.ctime().try_into().unwrap()));
+		let access = Some(epoch_to_utc(
+			value.atime(),
+			value.atime_nsec().try_into().unwrap(),
+		));
+		let modify = Some(epoch_to_utc(
+			value.mtime(),
+			value.mtime_nsec().try_into().unwrap(),
+		));
+		let change = Some(epoch_to_utc(
+			value.ctime(),
+			value.ctime_nsec().try_into().unwrap(),
+		));
 		let create = value.created().ok().map(|st| DateTime::<Utc>::from(st));
 
 		Self {
@@ -173,9 +181,8 @@ impl TryFrom<(&Path, &fs::Metadata)> for NodeKind {
 	}
 }
 
-fn dt_from_epoch(epoch_secs: u64) -> DateTime<Utc> {
-	let d = UNIX_EPOCH + Duration::from_secs(epoch_secs);
-	DateTime::<Utc>::from(d)
+fn epoch_to_utc(secs: i64, nsecs: u32) -> DateTime<Utc> {
+	Utc.timestamp_opt(secs, nsecs).single().unwrap()
 }
 
 #[cfg(target_family = "windows")]
@@ -235,9 +242,11 @@ impl From<&fs::Metadata> for crate::os::windows::Metadata {
 }
 
 #[cfg(target_family = "windows")]
-impl From<&fs::FileType> for TargetHint {
+impl From<&fs::FileType> for crate::obj::tree::node::TargetHint {
 	fn from(value: &fs::FileType) -> Self {
 		use std::os::windows::fs::FileTypeExt;
+
+		use crate::obj::tree::node::TargetHint;
 
 		if value.is_symlink_dir() {
 			TargetHint::Directory

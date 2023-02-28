@@ -2,6 +2,13 @@
 //! - Move out processing steps into separate crates
 //! - Save id within tagged chunk to verify it is correct
 //! - Make passphrase derivative function generic
+//! - Way to get a locked repo without writing a lock to backend (for append/readonly systems)
+//! - Allows stdin as source
+//! - Error Correction Algorithm? (Reed-Solomon)
+//! - Check chunk size after compression; if its larger do not compress
+//! - Allow selection of compression alg depending on mime/filetype, size ...
+//! - Sharding config (directory spliting of packs e.g. [2] => 02/123123312.., [2, 2] => 02/12/12312..) (https://kopia.io/docs/advanced/sharding/)
+//! - Save attr(5) attributes on unix with `xattr`
 
 #![allow(rustdoc::private_intra_doc_links)]
 #![deny(

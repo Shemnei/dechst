@@ -1,5 +1,4 @@
 use crate::obj::tree::node::Node;
-use crate::os::Metadata;
 
 pub mod fs;
 

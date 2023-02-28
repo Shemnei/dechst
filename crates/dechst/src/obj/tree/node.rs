@@ -89,6 +89,7 @@ impl NodeKind {
 	Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
 )]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// TODO: Make node generic over kind
 pub struct Node {
 	pub name: RawOsString,
 	#[serde(flatten)]
