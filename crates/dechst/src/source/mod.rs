@@ -1,10 +1,15 @@
 use crate::obj::tree::node::Node;
 
 pub mod fs;
+pub mod stdin;
+
+pub trait Item: Clone {
+	fn can_descend(&self) -> bool;
+}
 
 pub trait Source {
 	type Error: std::error::Error;
-	type Item;
+	type Item: Item;
 	type Read;
 
 	type Iter: Iterator<Item = Result<Self::Item, Self::Error>>;

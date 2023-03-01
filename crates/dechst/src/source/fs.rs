@@ -4,14 +4,28 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, TimeZone, Utc};
 
-use super::Source;
+use super::{Item, Source};
 use crate::obj::tree::node::{Node, NodeKind};
 use crate::os::raw::RawOsString;
+
+impl Item for PathBuf {
+	fn can_descend(&self) -> bool {
+		let Ok(meta) = std::fs::symlink_metadata(self) else {
+			return false;
+		};
+
+		meta.is_dir()
+	}
+}
 
 #[derive(Debug)]
 pub struct FsSource(PathBuf);
 
 impl FsSource {
+	pub fn new<P: Into<PathBuf>>(path: P) -> Self {
+		Self(path.into())
+	}
+
 	fn resolve_item(&self, item: &PathBuf) -> PathBuf {
 		self.0.join(item)
 	}
@@ -79,7 +93,7 @@ impl Iterator for Iter {
 	type Item = Result<PathBuf, std::io::Error>;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		todo!()
+		self.0.next().map(|o| o.map(|d| d.path()))
 	}
 }
 

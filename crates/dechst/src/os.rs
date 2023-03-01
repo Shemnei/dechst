@@ -1,3 +1,5 @@
+/// TODO
+/// - Move len from Metadata into generic struct
 use serde::{Deserialize, Serialize};
 
 pub mod raw {
@@ -74,6 +76,8 @@ pub mod raw {
 }
 
 pub mod unix {
+	use std::fmt;
+
 	use chrono::{DateTime, Utc};
 	use serde::{Deserialize, Serialize};
 
@@ -107,9 +111,18 @@ pub mod unix {
 		Option => #[serde(default, skip_serializing_if = "Option::is_none")],
 		Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
 	)]
-	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+	#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+	#[cfg_attr(target_family = "unix", derive(Default))]
 	pub struct Permissions {
 		pub mode: u32,
+	}
+
+	impl fmt::Debug for Permissions {
+		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+			f.debug_struct("Permissions")
+				.field("mode", &format!("{:o}", self.mode))
+				.finish()
+		}
 	}
 
 	#[serde_with::apply(
@@ -117,6 +130,7 @@ pub mod unix {
 		Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
 	)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+	#[cfg_attr(target_family = "unix", derive(Default))]
 	pub struct Times {
 		pub access: Option<DateTime<Utc>>,
 		// Content changed
@@ -131,6 +145,7 @@ pub mod unix {
 		Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
 	)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+	#[cfg_attr(target_family = "unix", derive(Default))]
 	pub struct Identifier {
 		pub dev: u64,
 		pub ino: u64,
@@ -141,6 +156,7 @@ pub mod unix {
 		Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
 	)]
 	#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+	#[cfg_attr(target_family = "unix", derive(Default))]
 	pub struct Metadata {
 		#[serde(flatten)]
 		pub user: User,
@@ -187,6 +203,7 @@ pub mod windows {
 		Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
 	)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+	#[cfg_attr(target_family = "windows", derive(Default))]
 	pub struct Permissions {
 		pub attributes: u32,
 	}
@@ -198,6 +215,7 @@ pub mod windows {
 		Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
 	)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+	#[cfg_attr(target_family = "windows", derive(Default))]
 	pub struct Times {
 		pub access: Option<DateTime<Utc>>,
 		// Content changed
@@ -210,6 +228,7 @@ pub mod windows {
 		Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
 	)]
 	#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+	#[cfg_attr(target_family = "windows", derive(Default))]
 	pub struct Identifier {
 		pub volume_serial_number: Option<u32>,
 		pub file_index: Option<u64>,
@@ -220,6 +239,7 @@ pub mod windows {
 		Vec => #[serde(default, skip_serializing_if = "Vec::is_empty")]
 	)]
 	#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+	#[cfg_attr(target_family = "windows", derive(Default))]
 	pub struct Metadata {
 		#[serde(flatten)]
 		pub user: User,
@@ -280,6 +300,20 @@ impl Default for User {
 pub enum Metadata {
 	Unix(unix::Metadata),
 	Windows(windows::Metadata),
+}
+
+#[cfg(target_family = "unix")]
+impl Default for Metadata {
+	fn default() -> Self {
+		Self::Unix(Default::default())
+	}
+}
+
+#[cfg(target_family = "windows")]
+impl Default for Metadata {
+	fn default() -> Self {
+		Self::Windows(Default::default())
+	}
 }
 
 impl From<unix::Metadata> for Metadata {

@@ -43,19 +43,29 @@
 #![feature(fs_try_exists)]
 #![cfg_attr(target_family = "windows", feature(windows_by_handle))]
 
+pub mod os;
+pub mod path;
+
 pub mod backend;
 pub mod id;
 pub mod obj;
-pub mod os;
 pub mod process;
 pub mod repo;
-
 pub mod source;
 
 mod ideas {
+	use crate::obj::tree::node::Node;
+
 	pub trait Target {
-		fn restore();
-		fn meta();
+		type Error: std::error::Error;
+		type Item;
+		type Write;
+
+		type Iter: Iterator<Item = Result<Self::Item, Self::Error>>;
+
+		fn iter(&self, item: Option<&Self::Item>) -> Result<Self::Iter, Self::Error>;
+		fn write(&self, item: &Self::Item) -> Result<Self::Write, Self::Error>;
+		fn node(&self, item: &Self::Item) -> Result<Node, Self::Error>;
 	}
 
 	#[derive(Debug, Clone, Copy)]
