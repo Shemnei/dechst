@@ -6,7 +6,7 @@ use chrono::{DateTime, TimeZone, Utc};
 
 use super::{Item, Source};
 use crate::obj::tree::node::{Node, NodeKind};
-use crate::os::raw::RawOsString;
+use crate::path::Segment;
 
 impl Item for PathBuf {
 	fn can_descend(&self) -> bool {
@@ -78,7 +78,7 @@ impl Source for FsSource {
 
 		let meta = self.extract_meta(&fsmeta)?;
 		let kind = (path.as_ref(), &fsmeta).try_into()?;
-		let name = RawOsString::from(path.file_name().unwrap().to_os_string());
+		let name = Segment::from(path.file_name().unwrap().to_os_string());
 
 		let node = Node { name, kind, meta };
 

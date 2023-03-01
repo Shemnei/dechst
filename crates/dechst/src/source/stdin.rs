@@ -4,7 +4,7 @@ use std::iter::Once;
 
 use super::{Item, Source};
 use crate::obj::tree::node::{Node, NodeKind};
-use crate::os::raw::RawOsString;
+use crate::path::Segment;
 
 #[derive(Debug, Clone, Copy)]
 pub struct StdinItem;
@@ -36,7 +36,7 @@ impl Source for StdinSource {
 	fn node(&self, item: &Self::Item) -> Result<Node, Self::Error> {
 		let meta = crate::os::Metadata::default();
 		let kind = NodeKind::file();
-		let name = RawOsString::from(OsString::from("stdin"));
+		let name = Segment::from(OsString::from("stdin"));
 
 		let node = Node { name, kind, meta };
 

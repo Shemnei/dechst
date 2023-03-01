@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::id::Id;
 use crate::os::raw::RawOsString;
 use crate::os::Metadata;
+use crate::path::{PathBuf, Segment};
 
 #[serde_with::apply(
 	Option => #[serde(default, skip_serializing_if = "Option::is_none")],
@@ -54,7 +55,7 @@ impl NodeKind {
 	#[cfg(target_family = "unix")]
 	pub fn symlink(target: OsString) -> Self {
 		Self::Symlink {
-			target: RawOsString::default(),
+			target: target.into(),
 			hint: None,
 		}
 	}
@@ -67,12 +68,12 @@ impl NodeKind {
 		}
 	}
 
-	pub fn dev(dev: u64) -> Self {
-		Self::Device { device: 0 }
+	pub fn dev(device: u64) -> Self {
+		Self::Device { device }
 	}
 
-	pub fn cdev(dev: u64) -> Self {
-		Self::CharacterDevice { device: 0 }
+	pub fn cdev(device: u64) -> Self {
+		Self::CharacterDevice { device }
 	}
 
 	pub fn fifo() -> Self {
@@ -91,7 +92,7 @@ impl NodeKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 // TODO: Make node generic over kind
 pub struct Node {
-	pub name: RawOsString,
+	pub name: Segment,
 	#[serde(flatten)]
 	pub kind: NodeKind,
 	#[serde(flatten)]

@@ -9,6 +9,7 @@
 //! - Allow selection of compression alg depending on mime/filetype, size ...
 //! - Sharding config (directory spliting of packs e.g. [2] => 02/123123312.., [2, 2] => 02/12/12312..) (https://kopia.io/docs/advanced/sharding/)
 //! - Save attr(5) attributes on unix with `xattr`
+//! - Move path into node_path and make separate os/backen path (RawOsString)
 
 #![allow(rustdoc::private_intra_doc_links)]
 #![deny(
@@ -38,6 +39,7 @@
 	clippy::redundant_pub_crate,
 	clippy::use_self
 )]
+#![allow(dead_code)]
 #![cfg_attr(docsrs, feature(doc_cfg), feature(doc_alias))]
 #![feature(associated_type_defaults)]
 #![feature(fs_try_exists)]

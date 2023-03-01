@@ -59,7 +59,7 @@ mod build {
 		/// - How do we handle hardlinks (completly different file stem)
 		use crate::{
 			obj::tree::node::{Node as ObjNode, NodeKind as ObjNodeKind},
-			path::{Path, PathBuf, Segment},
+			path::{Path, Segment},
 		};
 
 		pub enum Node<I> {
@@ -150,10 +150,8 @@ mod build {
 		impl<I> fmt::Debug for Node<I> {
 			fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 				match self {
-					Self::Leaf { node, item } => {
-						f.debug_struct("Leaf").field("node", node).finish()
-					}
-					Self::Branch { node, item, tree } => f
+					Self::Leaf { node, .. } => f.debug_struct("Leaf").field("node", node).finish(),
+					Self::Branch { node, tree, .. } => f
 						.debug_struct("Branch")
 						.field("node", node)
 						.field("tree", tree)
@@ -211,7 +209,7 @@ mod build {
 
 			// Recursive
 			fn get_or_create_tree(&mut self, path: &Path) -> &mut TreeBuilder<I> {
-				let Some((head, tail)) = path.split() else {
+				let Some((head, tail)) = path.split_head() else {
 					return self;
 				};
 
@@ -282,10 +280,7 @@ mod build {
 			/// TODO:
 			/// - How do we handle hardlinks (completly different file stem)
 			use crate::obj::tree::node::{Node as ObjNode, NodeKind as ObjNodeKind};
-			use crate::os::raw::RawOsString;
-			use crate::path::PathBuf;
-
-			pub type Segment = RawOsString;
+			use crate::path::{PathBuf, Segment};
 
 			#[derive(Debug)]
 			pub enum TreeErrorKind {

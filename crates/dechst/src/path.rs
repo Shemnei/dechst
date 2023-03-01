@@ -1,11 +1,13 @@
 use std::fmt;
 use std::ops::Deref;
 
+use serde::{Deserialize, Serialize};
+
 use crate::os::raw::RawOsString;
 
 pub type Segment = RawOsString;
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PathBuf(Vec<Segment>);
 
 impl PathBuf {
@@ -74,7 +76,7 @@ impl Path {
 		self.0.iter()
 	}
 
-	pub fn split(&self) -> Option<(&Segment, &Path)> {
+	pub fn split_head(&self) -> Option<(&Segment, &Path)> {
 		let [head, tail @ .. ] = &self.0 else  {
 				return None;
 			};
