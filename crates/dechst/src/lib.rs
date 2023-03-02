@@ -10,6 +10,7 @@
 //! - Sharding config (directory spliting of packs e.g. [2] => 02/123123312.., [2, 2] => 02/12/12312..) (https://kopia.io/docs/advanced/sharding/)
 //! - Save attr(5) attributes on unix with `xattr`
 //! - Move path into node_path and make separate os/backen path (RawOsString)
+#![feature(adt_const_params, generic_const_exprs)]
 
 #![allow(rustdoc::private_intra_doc_links)]
 #![deny(

@@ -1,0 +1,319 @@
+use super::{BackendRead, BackendWrite};
+
+#[derive(Debug)]
+pub struct TypedBackend<B>(B);
+
+impl<B: BackendWrite> TypedBackend<B> {
+	pub fn new(backend: B) -> Self {
+		Self(backend)
+	}
+}
+
+impl<B: BackendRead> TypedBackend<B> {
+	pub fn read_only(backend: B) -> Self {
+		Self(backend)
+	}
+}
+
+pub mod read {
+	use super::TypedBackend;
+	use crate::backend::{BackendRead, Result};
+	use crate::id::Id;
+	use crate::obj::ObjectKind;
+
+	pub trait ConfigRead {
+		fn exists(&self) -> Result<()>;
+		fn read_all(&self, buf: &mut Vec<u8>) -> Result<usize>;
+	}
+
+	macro_rules! generic_read {
+		( $name:ident $(=> $f:tt $(, $tail:tt )* )? ) => {
+			pub trait $name {
+				type Iter: Iterator<Item = crate::backend::Result<Id>>;
+
+				fn exists(&self, id: &crate::id::Id) -> crate::backend::Result<()>;
+				fn iter(&self) -> crate::backend::Result<Self::Iter>;
+				fn meta(&self, id: &Id) -> Result<crate::obj::ObjectMetadata>;
+				fn read_all(&self, id: &Id, buf: &mut Vec<u8>) -> crate::backend::Result<usize>;
+
+				$( generic_read!(_func $f => $(, $tail )*); )?
+			}
+		};
+
+		( _func read_at => $( $f:tt $(, $tail:tt )* )? ) => {
+			fn read_at(
+				&self,
+				id: &Id,
+				offset: u32,
+				buf: &mut [u8],
+			) -> crate::backend::Result<usize>;
+
+			$( generic_read!(_func $f => $(, $tail )*); )?
+		};
+	}
+
+	generic_read!(IndexRead);
+	generic_read!(KeyRead);
+	generic_read!(SnapshotRead);
+	generic_read!(PackRead => read_at);
+	generic_read!(LockRead);
+
+	pub trait TypedRead:
+		Sized + ConfigRead + IndexRead + KeyRead + SnapshotRead + PackRead + LockRead
+	{
+		fn config(&self) -> &dyn ConfigRead {
+			self
+		}
+
+		fn index(&self) -> &dyn IndexRead<Iter = <Self as IndexRead>::Iter> {
+			self
+		}
+
+		fn key(&self) -> &dyn KeyRead<Iter = <Self as KeyRead>::Iter> {
+			self
+		}
+
+		fn snapshot(&self) -> &dyn SnapshotRead<Iter = <Self as SnapshotRead>::Iter> {
+			self
+		}
+
+		fn pack(&self) -> &dyn PackRead<Iter = <Self as PackRead>::Iter> {
+			self
+		}
+
+		fn lock(&self) -> &dyn LockRead<Iter = <Self as LockRead>::Iter> {
+			self
+		}
+	}
+
+	impl<T> ConfigRead for TypedBackend<T>
+	where
+		T: BackendRead,
+	{
+		fn exists(&self) -> Result<()> {
+			self.0.exists(ObjectKind::Config, &Id::ZERO)
+		}
+
+		fn read_all(&self, buf: &mut Vec<u8>) -> Result<usize> {
+			self.0.read_all(ObjectKind::Config, &Id::ZERO, buf)
+		}
+	}
+
+	macro_rules! impl_generic_read {
+		( $read:ident : $obj:expr $(=> $f:tt $(, $tail:tt )* )? ) => {
+			impl<T> $read for crate::backend::typed::TypedBackend<T>
+			where
+				T: crate::backend::BackendRead,
+			{
+				type Iter = <T as crate::backend::BackendRead>::Iter;
+
+				fn exists(&self, id: &crate::id::Id) -> crate::backend::Result<()> {
+					self.0.exists($obj, id)
+				}
+
+				fn iter(&self) -> crate::backend::Result<<Self as IndexRead>::Iter> {
+					self.0.iter($obj)
+				}
+
+				fn meta(&self, id: &Id) -> Result<crate::obj::ObjectMetadata> {
+					self.0.meta($obj, id)
+				}
+
+				fn read_all(&self, id: &Id, buf: &mut Vec<u8>) -> crate::backend::Result<usize> {
+					self.0.read_all($obj, id, buf)
+				}
+
+				$( impl_generic_read!(_func $f $obj => $(, $tail )*); )?
+			}
+		};
+
+		( _func read_at $obj:expr => $( $f:tt $(, $tail:tt )* )? ) => {
+			fn read_at(&self, id: &Id, offset: u32, buf: &mut [u8]) -> crate::backend::Result<usize> {
+				self.0.read_at($obj, id, offset, buf)
+			}
+
+			$( impl_generic_read!(_func $f $obj => $(, $tail )*); )?
+		};
+	}
+
+	impl_generic_read!(IndexRead: crate::obj::ObjectKind::Index);
+	impl_generic_read!(KeyRead: crate::obj::ObjectKind::Key);
+	impl_generic_read!(SnapshotRead: crate::obj::ObjectKind::Snapshot);
+	impl_generic_read!(PackRead: crate::obj::ObjectKind::Pack => read_at);
+	impl_generic_read!(LockRead: crate::obj::ObjectKind::Lock);
+
+	impl<B: BackendRead> TypedRead for TypedBackend<B> {}
+
+	pub mod ext {
+		use super::ConfigRead;
+		use crate::backend::Result;
+		use crate::id::Id;
+
+		pub trait ConfigReadToEnd {
+			fn read_to_end(&self) -> Result<Vec<u8>>;
+		}
+
+		impl<T> ConfigReadToEnd for T
+		where
+			T: ConfigRead,
+		{
+			fn read_to_end(&self) -> Result<Vec<u8>> {
+				let mut buf = Vec::new();
+				let bread = self.read_all(&mut buf)?;
+				buf.truncate(bread);
+				Ok(buf)
+			}
+		}
+
+		macro_rules! impl_read_to_end {
+			( $name:ident : $read:path ) => {
+				pub trait $name {
+					fn read_to_end(&self, id: &Id) -> Result<Vec<u8>>;
+				}
+
+				impl<T> $name for T
+				where
+					T: ?Sized + $read,
+				{
+					fn read_to_end(&self, id: &Id) -> Result<Vec<u8>> {
+						let mut buf = Vec::new();
+						let bread = self.read_all(id, &mut buf)?;
+						buf.truncate(bread);
+						Ok(buf)
+					}
+				}
+			};
+		}
+
+		impl_read_to_end!(IndexReadToEnd: crate::backend::typed::read::IndexRead);
+		impl_read_to_end!(KeyReadToEnd: crate::backend::typed::read::KeyRead);
+		impl_read_to_end!(SnapshotReadToEnd: crate::backend::typed::read::SnapshotRead);
+		impl_read_to_end!(PackReadToEnd: crate::backend::typed::read::PackRead);
+		impl_read_to_end!(LockReadToEnd: crate::backend::typed::read::LockRead);
+
+		/*
+		macro_rules! impl_find_ids {
+			( $name:ident : $read:path ) => {
+				pub trait $name {
+					fn read_to_end(&self, id: &Id) -> Result<Vec<u8>>;
+				}
+
+				impl<T> $name for T
+				where
+					T: ?Sized + $read,
+				{
+					fn read_to_end(&self, id: &Id) -> Result<Vec<u8>> {
+						let mut buf = Vec::new();
+						let bread = self.read_all(id, &mut buf)?;
+						buf.truncate(bread);
+						Ok(buf)
+					}
+				}
+			};
+		}
+
+		impl_find_ids!(IndexReadToEnd: crate::backend::typed::read::IndexRead);
+		impl_find_ids!(KeyReadToEnd: crate::backend::typed::read::KeyRead);
+		impl_find_ids!(SnapshotReadToEnd: crate::backend::typed::read::SnapshotRead);
+		impl_find_ids!(PackReadToEnd: crate::backend::typed::read::PackRead);
+		impl_find_ids!(LockReadToEnd: crate::backend::typed::read::LockRead);
+		*/
+	}
+}
+
+pub mod write {
+	use super::read::{
+		ConfigRead, IndexRead, KeyRead, LockRead, PackRead, SnapshotRead, TypedRead,
+	};
+	use super::TypedBackend;
+	use crate::backend::{BackendWrite, Result};
+	use crate::id::Id;
+	use crate::obj::ObjectKind;
+
+	pub trait ConfigWrite: ConfigRead {
+		fn remove(&mut self) -> Result<()>;
+		fn write_all(&mut self, buf: &[u8]) -> Result<()>;
+	}
+
+	macro_rules! generic_write {
+		( $name:ident : $read:path ) => {
+			pub trait $name: $read {
+				fn remove(&mut self, id: &Id) -> Result<()>;
+				fn write_all(&mut self, id: &Id, buf: &[u8]) -> Result<()>;
+			}
+		};
+	}
+
+	generic_write!(IndexWrite: crate::backend::typed::read::IndexRead);
+	generic_write!(KeyWrite: crate::backend::typed::read::KeyRead);
+	generic_write!(SnapshotWrite: crate::backend::typed::read::SnapshotRead);
+	generic_write!(PackWrite: crate::backend::typed::read::PackRead);
+	generic_write!(LockWrite: crate::backend::typed::read::LockRead);
+
+	pub trait TypedWrite:
+		TypedRead + ConfigWrite + IndexWrite + KeyWrite + SnapshotWrite + PackWrite + LockWrite
+	{
+		fn config_mut(&mut self) -> &mut dyn ConfigWrite {
+			self
+		}
+
+		fn index_mut(&mut self) -> &mut dyn IndexWrite<Iter = <Self as IndexRead>::Iter> {
+			self
+		}
+
+		fn key_mut(&mut self) -> &mut dyn KeyWrite<Iter = <Self as KeyRead>::Iter> {
+			self
+		}
+
+		fn snapshot_mut(&mut self) -> &mut dyn SnapshotWrite<Iter = <Self as SnapshotRead>::Iter> {
+			self
+		}
+
+		fn pack_mut(&mut self) -> &mut dyn PackWrite<Iter = <Self as PackRead>::Iter> {
+			self
+		}
+
+		fn lock_mut(&mut self) -> &mut dyn LockWrite<Iter = <Self as LockRead>::Iter> {
+			self
+		}
+	}
+
+	impl<T: BackendWrite> ConfigWrite for TypedBackend<T> {
+		fn remove(&mut self) -> Result<()> {
+			self.0.remove(ObjectKind::Config, &Id::ZERO)
+		}
+
+		fn write_all(&mut self, buf: &[u8]) -> Result<()> {
+			self.0.write_all(ObjectKind::Config, &Id::ZERO, buf)
+		}
+	}
+
+	macro_rules! impl_generic_write {
+		( $read:ident : $obj:expr ) => {
+			impl<T> $read for crate::backend::typed::TypedBackend<T>
+			where
+				T: crate::backend::BackendWrite,
+			{
+				fn remove(&mut self, id: &crate::id::Id) -> crate::backend::Result<()> {
+					self.0.remove($obj, id)
+				}
+
+				fn write_all(
+					&mut self,
+					id: &crate::id::Id,
+					buf: &[u8],
+				) -> crate::backend::Result<()> {
+					self.0.write_all($obj, id, buf)
+				}
+			}
+		};
+	}
+
+	impl_generic_write!(IndexWrite: crate::obj::ObjectKind::Index);
+	impl_generic_write!(KeyWrite: crate::obj::ObjectKind::Key);
+	impl_generic_write!(SnapshotWrite: crate::obj::ObjectKind::Snapshot);
+	impl_generic_write!(PackWrite: crate::obj::ObjectKind::Pack);
+	impl_generic_write!(LockWrite: crate::obj::ObjectKind::Lock);
+
+	impl<B: BackendWrite> TypedWrite for TypedBackend<B> {}
+}

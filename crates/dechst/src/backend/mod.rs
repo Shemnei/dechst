@@ -1,7 +1,6 @@
 pub mod ext;
 pub mod local;
-pub mod local2;
-//pub mod typed;
+pub mod typed;
 
 use std::borrow::Cow;
 use std::fmt;

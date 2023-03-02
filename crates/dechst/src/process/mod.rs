@@ -478,13 +478,12 @@ mod build {
 		}
 
 		#[cfg(test)]
+		#[allow(unused_imports)]
 		mod test {
-			use std::path::Path;
 			use std::time::Instant;
 
 			use super::*;
-			use crate::obj::tree::node::{Node, NodeKind};
-			use crate::os::Metadata;
+			use crate::path::PathBuf;
 			use crate::source::fs::FsSource;
 			use crate::source::stdin::StdinSource;
 			use crate::source::{Item, Source};
@@ -547,8 +546,8 @@ mod build {
 
 				let path = std::env::var_os("DECHST_TEST_PATH").unwrap();
 				println!("Path: {}", path.to_string_lossy());
-				//let source = FsSource::new(path);
-				let source = StdinSource;
+				let source = FsSource::new(path);
+				//let source = StdinSource;
 				let mut tree = TreeBuilder::default();
 
 				let start = Instant::now();

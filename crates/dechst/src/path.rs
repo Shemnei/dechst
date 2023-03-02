@@ -65,11 +65,12 @@ impl Deref for PathBuf {
 pub struct Path([Segment]);
 
 impl Path {
-	pub fn new<P: AsRef<[Segment]> + ?Sized>(p: &P) -> &Self {
-		let p = p.as_ref();
-		let p: *const [Segment] = p;
+	const fn from_inner(inner: &[Segment]) -> &Self {
+		unsafe { std::mem::transmute(inner) }
+	}
 
-		unsafe { &*(p as *const Self) }
+	pub fn new<P: AsRef<[Segment]> + ?Sized>(p: &P) -> &Self {
+		Self::from_inner(p.as_ref())
 	}
 
 	pub fn segments(&self) -> std::slice::Iter<'_, Segment> {
