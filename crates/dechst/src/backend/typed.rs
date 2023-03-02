@@ -72,6 +72,51 @@ macro_rules! cgti {
 			}
 		)*
 	};
+
+	// Mutable variants
+	(
+		$(
+			$name:ident [ $obj:expr $( => $did:expr )? ] =>
+			{
+				$( type $ty_name:ident = $ty_ty:ty ; )*
+				$( fn $fn:ident (&mut self $(, $key:ident : $val:ty )* ) $( -> $ret:ty )? ; )*
+			}
+		)+
+	) => {
+		$(
+			impl<B> $name<{ $obj }> for TypedBackend<B>
+			where
+				B: BackendWrite,
+			{
+				$( type $ty_name = $ty_ty ; )*
+				cgti!(_fn_impl_mut $obj => $( $did => )? $( fn $fn ( &mut self $(, $key : $val )* ) $( -> $ret )? ; )* );
+			}
+		)+
+	};
+
+	// Function with default id instead of parameter
+	(
+		_fn_impl_mut $obj:expr => $did:expr =>
+		$( fn $fn:ident (&mut self $(, $key:ident : $val:ty )* ) $( -> $ret:ty )? ; )*
+	) => {
+		$(
+			fn $fn(&mut self $( , $key: $val)* ) $(-> $ret)? {
+				self.0.$fn( $obj , $did $( , $key )* )
+			}
+		)*
+	};
+
+	// Function with only parameters
+	(
+		_fn_impl_mut $obj:expr =>
+		$( fn $fn:ident (&mut self $(, $key:ident : $val:ty )* ) $( -> $ret:ty )? ; )*
+	) => {
+		$(
+			fn $fn(&mut self $( , $key: $val)* ) $(-> $ret)? {
+				self.0.$fn( $obj $( , $key )* )
+			}
+		)*
+	};
 }
 
 pub mod read {
@@ -384,6 +429,20 @@ pub mod read {
 			NonUnique,
 		}
 
+		impl Find {
+			pub fn is_none(&self) -> bool {
+				matches!(self, Self::None)
+			}
+
+			pub fn is_unique(&self) -> bool {
+				matches!(self, Self::Unique(_))
+			}
+
+			pub fn is_non_unique(&self) -> bool {
+				matches!(self, Self::NonUnique)
+			}
+		}
+
 		cgt! {
 			pub trait FindIds {
 				fn find_ids(&self, ids: &[&str]) -> Result<Vec<Find>>;
@@ -395,6 +454,7 @@ pub mod read {
 			T: ?Sized + Iter<OBJECT>,
 			T::Iter: Iterator<Item = Result<Id>>,
 		{
+			// TODO: might be some improvement potential
 			fn find_ids(&self, ids: &[&str]) -> Result<Vec<Find>> {
 				if ids.is_empty() {
 					return Ok(Vec::new());
@@ -474,179 +534,180 @@ pub mod read {
 		}
 	}
 }
-/*
-	pub mod ext {
-		use super::ConfigRead;
-		use crate::backend::Result;
-		use crate::id::Id;
-
-		pub trait ConfigReadToEnd {
-			fn read_to_end(&self) -> Result<Vec<u8>>;
-		}
-
-		impl<T> ConfigReadToEnd for T
-		where
-			T: ConfigRead,
-		{
-			fn read_to_end(&self) -> Result<Vec<u8>> {
-				let mut buf = Vec::new();
-				let bread = self.read_all(&mut buf)?;
-				buf.truncate(bread);
-				Ok(buf)
-			}
-		}
-
-		macro_rules! impl_read_to_end {
-			( $name:ident : $read:path ) => {
-				pub trait $name {
-					fn read_to_end(&self, id: &Id) -> Result<Vec<u8>>;
-				}
-
-				impl<T> $name for T
-				where
-					T: ?Sized + $read,
-				{
-					fn read_to_end(&self, id: &Id) -> Result<Vec<u8>> {
-						let mut buf = Vec::new();
-						let bread = self.read_all(id, &mut buf)?;
-						buf.truncate(bread);
-						Ok(buf)
-					}
-				}
-			};
-		}
-
-		impl_read_to_end!(IndexReadToEnd: crate::backend::typed::read::IndexRead);
-		impl_read_to_end!(KeyReadToEnd: crate::backend::typed::read::KeyRead);
-		impl_read_to_end!(SnapshotReadToEnd: crate::backend::typed::read::SnapshotRead);
-		impl_read_to_end!(PackReadToEnd: crate::backend::typed::read::PackRead);
-		impl_read_to_end!(LockReadToEnd: crate::backend::typed::read::LockRead);
-
-		/*
-		macro_rules! impl_find_ids {
-			( $name:ident : $read:path ) => {
-				pub trait $name {
-					fn read_to_end(&self, id: &Id) -> Result<Vec<u8>>;
-				}
-
-				impl<T> $name for T
-				where
-					T: ?Sized + $read,
-				{
-					fn read_to_end(&self, id: &Id) -> Result<Vec<u8>> {
-						let mut buf = Vec::new();
-						let bread = self.read_all(id, &mut buf)?;
-						buf.truncate(bread);
-						Ok(buf)
-					}
-				}
-			};
-		}
-
-		impl_find_ids!(IndexReadToEnd: crate::backend::typed::read::IndexRead);
-		impl_find_ids!(KeyReadToEnd: crate::backend::typed::read::KeyRead);
-		impl_find_ids!(SnapshotReadToEnd: crate::backend::typed::read::SnapshotRead);
-		impl_find_ids!(PackReadToEnd: crate::backend::typed::read::PackRead);
-		impl_find_ids!(LockReadToEnd: crate::backend::typed::read::LockRead);
-		*/
-	}
-}
 
 pub mod write {
-	use super::read::{
-		ConfigRead, IndexRead, KeyRead, LockRead, PackRead, SnapshotRead, TypedRead,
-	};
+	use super::read::{GenericRead, GenericReadDid, TypedRead};
 	use super::TypedBackend;
-	use crate::backend::{BackendWrite, Result};
+	use crate::backend::{BackendRead, BackendWrite, Result};
 	use crate::id::Id;
-	use crate::obj::ObjectKind;
+	use crate::obj::{ObjectKind, ObjectMetadata};
 
-	pub trait ConfigWrite: ConfigRead {
-		fn remove(&mut self) -> Result<()>;
-		fn write_all(&mut self, buf: &[u8]) -> Result<()>;
+	// CONFIG (Special)
+	// Did = Default Id
+
+	cgt! {
+		pub trait RemoveDid {
+			fn remove(&mut self) -> Result<()>;
+		}
+		pub trait WriteAllDid {
+			fn write_all(&mut self, buf: &[u8]) -> Result<()>;
+		}
 	}
 
-	macro_rules! generic_write {
-		( $name:ident : $read:path ) => {
-			pub trait $name: $read {
-				fn remove(&mut self, id: &Id) -> Result<()>;
-				fn write_all(&mut self, id: &Id, buf: &[u8]) -> Result<()>;
-			}
-		};
+	cgti! {
+		RemoveDid[ObjectKind::Config => &Id::ZERO] => {
+			fn remove(&mut self) -> Result<()>;
+		}
+		WriteAllDid[ObjectKind::Config => &Id::ZERO] => {
+			fn write_all(&mut self, buf: &[u8]) -> Result<()>;
+		}
 	}
 
-	generic_write!(IndexWrite: crate::backend::typed::read::IndexRead);
-	generic_write!(KeyWrite: crate::backend::typed::read::KeyRead);
-	generic_write!(SnapshotWrite: crate::backend::typed::read::SnapshotRead);
-	generic_write!(PackWrite: crate::backend::typed::read::PackRead);
-	generic_write!(LockWrite: crate::backend::typed::read::LockRead);
-
-	pub trait TypedWrite:
-		TypedRead + ConfigWrite + IndexWrite + KeyWrite + SnapshotWrite + PackWrite + LockWrite
+	pub trait GenericWriteDid<const OBJECT: ObjectKind>:
+		GenericReadDid<{ OBJECT }> + RemoveDid<OBJECT> + WriteAllDid<OBJECT>
 	{
-		fn config_mut(&mut self) -> &mut dyn ConfigWrite {
-			self
-		}
+	}
 
-		fn index_mut(&mut self) -> &mut dyn IndexWrite<Iter = <Self as IndexRead>::Iter> {
-			self
-		}
+	impl<B, const OBJECT: ObjectKind> GenericWriteDid<OBJECT> for TypedBackend<B>
+	where
+		B: BackendWrite,
+		TypedBackend<B>: GenericReadDid<{ OBJECT }>,
+		TypedBackend<B>: RemoveDid<{ OBJECT }>,
+		TypedBackend<B>: WriteAllDid<{ OBJECT }>,
+	{
+	}
 
-		fn key_mut(&mut self) -> &mut dyn KeyWrite<Iter = <Self as KeyRead>::Iter> {
-			self
-		}
-
-		fn snapshot_mut(&mut self) -> &mut dyn SnapshotWrite<Iter = <Self as SnapshotRead>::Iter> {
-			self
-		}
-
-		fn pack_mut(&mut self) -> &mut dyn PackWrite<Iter = <Self as PackRead>::Iter> {
-			self
-		}
-
-		fn lock_mut(&mut self) -> &mut dyn LockWrite<Iter = <Self as LockRead>::Iter> {
-			self
+	// EXISTS
+	cgt! {
+		pub trait Remove {
+			fn remove(&mut self, id: &Id) -> Result<()>;
 		}
 	}
 
-	impl<T: BackendWrite> ConfigWrite for TypedBackend<T> {
-		fn remove(&mut self) -> Result<()> {
-			self.0.remove(ObjectKind::Config, &Id::ZERO)
-		}
-
-		fn write_all(&mut self, buf: &[u8]) -> Result<()> {
-			self.0.write_all(ObjectKind::Config, &Id::ZERO, buf)
-		}
-	}
-
-	macro_rules! impl_generic_write {
-		( $read:ident : $obj:expr ) => {
-			impl<T> $read for crate::backend::typed::TypedBackend<T>
-			where
-				T: crate::backend::BackendWrite,
-			{
-				fn remove(&mut self, id: &crate::id::Id) -> crate::backend::Result<()> {
-					self.0.remove($obj, id)
+	macro_rules! cgti_remove {
+		(
+			$( $obj:expr ),+
+		) => {
+			$(
+				cgti! {
+					Remove[$obj] => {
+						fn remove(&mut self, id: &Id) -> Result<()>;
+					}
 				}
-
-				fn write_all(
-					&mut self,
-					id: &crate::id::Id,
-					buf: &[u8],
-				) -> crate::backend::Result<()> {
-					self.0.write_all($obj, id, buf)
-				}
-			}
+			)+
 		};
 	}
 
-	impl_generic_write!(IndexWrite: crate::obj::ObjectKind::Index);
-	impl_generic_write!(KeyWrite: crate::obj::ObjectKind::Key);
-	impl_generic_write!(SnapshotWrite: crate::obj::ObjectKind::Snapshot);
-	impl_generic_write!(PackWrite: crate::obj::ObjectKind::Pack);
-	impl_generic_write!(LockWrite: crate::obj::ObjectKind::Lock);
+	cgti_remove![
+		ObjectKind::Index,
+		ObjectKind::Key,
+		ObjectKind::Snapshot,
+		ObjectKind::Pack,
+		ObjectKind::Lock
+	];
 
-	impl<B: BackendWrite> TypedWrite for TypedBackend<B> {}
+	// WRITE_ALL
+	cgt! {
+		pub trait WriteALl {
+			fn write_all(&mut self, id: &Id, buf: &[u8]) -> Result<()>;
+		}
+	}
+
+	macro_rules! cgti_writeall {
+		(
+			$( $obj:expr ),+
+		) => {
+			$(
+				cgti! {
+					WriteALl[$obj] => {
+						fn write_all(&mut self, id: &Id, buf: &[u8]) -> Result<()>;
+					}
+				}
+			)+
+		};
+	}
+
+	cgti_writeall![
+		ObjectKind::Index,
+		ObjectKind::Key,
+		ObjectKind::Snapshot,
+		ObjectKind::Pack,
+		ObjectKind::Lock
+	];
+
+	// GENERIC_WRITE
+
+	pub trait GenericWrite<const OBJECT: ObjectKind>:
+		GenericRead<OBJECT> + Remove<OBJECT> + WriteALl<OBJECT>
+	{
+	}
+
+	impl<B, const OBJECT: ObjectKind> GenericWrite<OBJECT> for TypedBackend<B>
+	where
+		B: BackendWrite,
+		TypedBackend<B>: GenericRead<OBJECT>,
+		TypedBackend<B>: Remove<OBJECT>,
+		TypedBackend<B>: WriteALl<OBJECT>,
+	{
+	}
+
+	// TYPED_READ
+	pub trait TypedWrite: TypedRead {
+		fn config_mut(&mut self) -> &mut dyn GenericWriteDid<{ ObjectKind::Config }>;
+		fn index_mut(
+			&mut self,
+		) -> &mut dyn GenericWrite<{ ObjectKind::Index }, Iter = <Self as TypedRead>::Iter>;
+		fn key_mut(
+			&mut self,
+		) -> &mut dyn GenericWrite<{ ObjectKind::Key }, Iter = <Self as TypedRead>::Iter>;
+		fn snapshot_mut(
+			&mut self,
+		) -> &mut dyn GenericWrite<{ ObjectKind::Snapshot }, Iter = <Self as TypedRead>::Iter>;
+		fn pack_mut(
+			&mut self,
+		) -> &mut dyn GenericWrite<{ ObjectKind::Pack }, Iter = <Self as TypedRead>::Iter>;
+		fn lock_mut(
+			&mut self,
+		) -> &mut dyn GenericWrite<{ ObjectKind::Lock }, Iter = <Self as TypedRead>::Iter>;
+	}
+
+	impl<B> TypedWrite for TypedBackend<B>
+	where
+		B: BackendWrite,
+		TypedBackend<B>: TypedRead<Iter = B::Iter>,
+	{
+		fn config_mut(&mut self) -> &mut dyn GenericWriteDid<{ ObjectKind::Config }> {
+			self
+		}
+
+		fn index_mut(
+			&mut self,
+		) -> &mut dyn GenericWrite<{ ObjectKind::Index }, Iter = <Self as TypedRead>::Iter> {
+			self
+		}
+
+		fn key_mut(
+			&mut self,
+		) -> &mut dyn GenericWrite<{ ObjectKind::Key }, Iter = <Self as TypedRead>::Iter> {
+			self
+		}
+
+		fn snapshot_mut(
+			&mut self,
+		) -> &mut dyn GenericWrite<{ ObjectKind::Snapshot }, Iter = <Self as TypedRead>::Iter> {
+			self
+		}
+
+		fn pack_mut(
+			&mut self,
+		) -> &mut dyn GenericWrite<{ ObjectKind::Pack }, Iter = <Self as TypedRead>::Iter> {
+			self
+		}
+
+		fn lock_mut(
+			&mut self,
+		) -> &mut dyn GenericWrite<{ ObjectKind::Lock }, Iter = <Self as TypedRead>::Iter> {
+			self
+		}
+	}
 }
-
-*/
